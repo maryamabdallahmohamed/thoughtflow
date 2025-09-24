@@ -1,5 +1,5 @@
 import re
-from farasa import FarasaSegmenter   # ✅ correct
+from farasa import FarasaSegmenter   
 
 
 farasa = FarasaSegmenter(interactive=True)

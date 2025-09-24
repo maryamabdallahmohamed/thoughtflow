@@ -1,0 +1,10 @@
+backports.tarfile==1.2.0
+dotenv==0.9.9
+farasapy==0.1.1
+importlib-metadata==8.0.0
+jaraco.collections==5.1.0
+pip-chill==1.0.3
+pipreqs==0.4.13
+platformdirs==4.2.2
+sentence-transformers==5.1.1
+tomli==2.0.1

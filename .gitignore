@@ -1,3 +1,8 @@
 documentations
 myenv
 FarasaSegmenterJar.jar
+cache
+.env
+*.jar
+__pycache__
+.Ds_Store

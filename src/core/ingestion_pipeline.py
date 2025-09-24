@@ -48,7 +48,7 @@ def clean_and_segment(text: str) -> str:
         text = normalize_arabic(text)
         text = remove_diacritics(text)
 
-        # Segment
+        # Segment using Farasa
         segmented = farasa.segment(text)
 
         # Stopword removal
@@ -60,26 +60,45 @@ def clean_and_segment(text: str) -> str:
         print(f"[ERROR] Farasa failed on text: {text}\nReason: {e}")
         return text  # fallback
 
+def split_into_sentences(text: str) -> list:
+    """
+    Split Arabic text into sentences using common punctuation.
+    """
+    # Split on common sentence endings
+    sentences = re.split(r'[.!?؟।\n]+', text)
+    
+    # Clean and filter sentences
+    sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+    
+    return sentences
+
 def ingestion_pipeline(raw_texts):
     """
-    Ingests, cleans, and normalizes a list of texts.
+    Ingests, cleans, and normalizes a list of texts or a single text.
     """
+    # Handle both single string and list of strings
+    if isinstance(raw_texts, str):
+        # Split single text into sentences first
+        sentences = split_into_sentences(raw_texts)
+        raw_texts = sentences
+    
     processed = []
     for t in raw_texts:
         normalized = clean_and_segment(t)
-        processed.append(normalized)
+        if normalized.strip():  # Only add non-empty results
+            processed.append(normalized)
     return processed
 
 
-# 🔹 Example usage
-if __name__ == "__main__":
-    raw_samples = [
-        "وإلى اللقاء في القاهرةةة",
-        "اللغة العربية جميلة جداً!!!",
-        "كان هذا اختباراً للنظام."
-    ]
+# # 🔹 Example usage
+# if __name__ == "__main__":
+#     raw_samples = [
+#         "وإلى اللقاء في القاهرةةة",
+#         "اللغة العربية جميلة جداً!!!",
+#         "كان هذا اختباراً للنظام."
+#     ]
 
-    processed = ingestion_pipeline(raw_samples)
-    for original, cleaned in zip(raw_samples, processed):
-        print(f"Original: {original}")
-        print(f"Processed: {cleaned}")
+#     processed = ingestion_pipeline(raw_samples)
+#     for original, cleaned in zip(raw_samples, processed):
+#         print(f"Original: {original}")
+#         print(f"Processed: {cleaned}")

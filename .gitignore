@@ -6,3 +6,4 @@ cache
 *.jar
 __pycache__
 .Ds_Store
+archive

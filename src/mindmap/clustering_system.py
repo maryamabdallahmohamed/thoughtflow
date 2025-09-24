@@ -11,9 +11,14 @@ class MindmapClusteringSystem:
     def __init__(self):
         self.embedder = Embedder()
         
-    def process_document(self, document_content, document_type="text"):
+    def process_document(self, document_content, document_type="text", extract_relationships=True):
         """
         Process a document and create dynamic clusters for mindmap
+        
+        Args:
+            document_content: Input document content
+            document_type: Type of document ("text", "json", etc.)
+            extract_relationships: Whether to extract semantic relationships (FR2.3)
         """
         
         print(f"📄 Processing document ({document_type})...")
@@ -43,21 +48,57 @@ class MindmapClusteringSystem:
         print("🎯 Applying dynamic clustering...")
         clustering_result = create_dynamic_mindmap_clusters(embeddings, cleaned_texts)
         
-        # 4. Create Mindmap Structure
+        # 4. Extract Relationships (FR2.3)
+        if extract_relationships:
+            try:
+                from src.mindmap.relationship_extractor import extract_and_enhance_relationships
+                
+                enhanced_clustering, relationship_summary = extract_and_enhance_relationships(
+                    clustering_result, embeddings, cleaned_texts,
+                    similarity_threshold=0.7, max_relationships=5
+                )
+                clustering_result = enhanced_clustering
+                
+            except ImportError as e:
+                print(f"⚠️  Relationship extraction not available: {e}")
+                relationship_summary = {'total_relationships': 0}
+            except Exception as e:
+                print(f"⚠️  Relationship extraction failed: {e}")
+                relationship_summary = {'total_relationships': 0}
+        else:
+            relationship_summary = {'total_relationships': 0}
+        
+        # 5. Create Mindmap Structure
         mindmap_structure = self._create_mindmap_structure(
             cleaned_texts, 
             clustering_result
         )
+        
+        # 6. Enhance mindmap with relationships if available
+        if extract_relationships and 'relationships' in clustering_result:
+            try:
+                from src.mindmap.relationship_extractor import RelationshipExtractor
+                
+                extractor = RelationshipExtractor()
+                mindmap_structure = extractor.enhance_mindmap_with_relationships(
+                    {'mindmap': mindmap_structure}, clustering_result
+                )['mindmap']
+                
+            except Exception as e:
+                print(f"⚠️  Mindmap relationship enhancement failed: {e}")
         
         return {
             'texts': cleaned_texts,
             'embeddings': embeddings,
             'clustering': clustering_result,
             'mindmap': mindmap_structure,
+            'relationships': relationship_summary,
             'metadata': {
                 'total_segments': len(cleaned_texts),
                 'cluster_count': len(set(clustering_result['primary_labels'])),
-                'quality_score': clustering_result['score']
+                'quality_score': clustering_result['score'],
+                'relationships_extracted': relationship_summary['total_relationships'] > 0,
+                'total_relationships': relationship_summary['total_relationships']
             }
         }
     
@@ -110,11 +151,14 @@ class MindmapClusteringSystem:
                 'branches': [],
                 'structure': 'single_node'
             },
+            'relationships': {'total_relationships': 0},
             'metadata': {
                 'total_segments': len(texts),
                 'algorithm_used': 'none',
                 'cluster_count': 1,
                 'quality_score': 0.0,
+                'relationships_extracted': False,
+                'total_relationships': 0,
                 'warning': 'Insufficient data for clustering'
             }
         }
@@ -236,4 +280,65 @@ class MindmapClusteringSystem:
             print(f"❌ Visualization error: {e}")
             print("💡 Make sure utils/visualization_scripts.py exists and is properly configured")
 
+# Demo function
+def demo_clustering_system():
+    """Demonstrate the clustering system with relationship extraction"""
+    
+    system = MindmapClusteringSystem()
+    
+    print("🧪 Testing Mindmap Clustering System with Relationship Extraction")
+    print("=" * 70)
+    
+    # Test with diverse content file path
+    result = system.process_document('/Users/maryamsaad/Documents/Graduation_Proj/junk/medium_GT.json', document_type="json", extract_relationships=True)
+    
+    print(f"\n📊 Clustering Results:")
+    print(f"   Segments: {result['metadata']['total_segments']}")
+    print(f"   Clusters: {result['metadata']['cluster_count']}")
+    print(f"   Quality: {result['metadata']['quality_score']:.3f}")
+    
+    print(f"\n🔗 Relationship Results (FR2.3):")
+    print(f"   Relationships extracted: {result['metadata']['relationships_extracted']}")
+    print(f"   Total relationships: {result['metadata']['total_relationships']}")
+    
+    if result['relationships']['total_relationships'] > 0:
+        rel_summary = result['relationships']
+        print(f"   Average per cluster: {rel_summary.get('average_per_cluster', 0):.1f}")
+        
+        if 'confidence_range' in rel_summary:
+            conf_range = rel_summary['confidence_range']
+            print(f"   Confidence range: {conf_range['min']:.3f} - {conf_range['max']:.3f}")
+            print(f"   Average confidence: {conf_range['average']:.3f}")
+    
+    print(f"\n🌳 Enhanced Mindmap Structure:")
+    for i, branch in enumerate(result['mindmap']['branches']):
+        print(f"   Branch {i+1}: {branch['title']} ({branch['size']} concepts)")
+        
+        # Show relationship information
+        if 'relationship_count' in branch:
+            print(f"      Relationships: {branch['relationship_count']}")
+            print(f"      Density: {branch.get('relationship_density', 0):.3f}")
+            
+            # Show sample relationships
+            if branch.get('relationships') and len(branch['relationships']) > 0:
+                print(f"      Sample connections:")
+                for rel in branch['relationships'][:2]:  # Show first 2
+                    source_concept = branch['concepts'][rel['source_index']]['display_text'][:40]
+                    target_concept = branch['concepts'][rel['target_index']]['display_text'][:40]
+                    print(f"         '{source_concept}...' → '{target_concept}...' ({rel['confidence']:.3f})")
+        
+        # Show first concept in each branch
+        if branch['concepts']:
+            first_concept = branch['concepts'][0]['display_text']
+            print(f"      Example concept: {first_concept}")
+    
+    # Optional visualization
+    print(f"\n🎨 Optional Visualization:")
+    print("To create visualizations with relationships, run:")
+    print("   system.visualize_mindmap(result, 'interactive')")
+    print("   system.visualize_mindmap(result, 'network')  # Best for showing relationships")
+    
+    return result
 
+if __name__ == "__main__":
+    demo_clustering_system()

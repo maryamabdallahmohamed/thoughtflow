@@ -1,5 +1,6 @@
 from src.core.dynamic_clustering import create_dynamic_mindmap_clusters
 from src.core.embedder import Embedder
+from src.mindmap.relationship_extractor import extract_and_enhance_relationships
 from src.core.ingestion_pipeline import ingestion_pipeline
 import json
 
@@ -11,7 +12,7 @@ class MindmapClusteringSystem:
     def __init__(self):
         self.embedder = Embedder()
         
-    def process_document(self, document_content, document_type="text", extract_relationships=True):
+    def process_document(self, texts, extract_relationships=True):
         """
         Process a document and create dynamic clusters for mindmap
         
@@ -21,18 +22,7 @@ class MindmapClusteringSystem:
             extract_relationships: Whether to extract semantic relationships (FR2.3)
         """
         
-        print(f"📄 Processing document ({document_type})...")
-        
-        # 1. Text Processing & Segmentation
-        if document_type == "json":
-            texts = self._extract_from_json(document_content)
-        elif isinstance(document_content, list):
-            texts = document_content
-        else:
-            texts = [document_content]
-        
-        print(f"📚 Extracted {len(texts)} raw texts")
-        
+
         # Clean and segment texts
         cleaned_texts = ingestion_pipeline(texts)
         print(f"📝 Processed {len(cleaned_texts)} text segments")
@@ -51,8 +41,6 @@ class MindmapClusteringSystem:
         # 4. Extract Relationships (FR2.3)
         if extract_relationships:
             try:
-                from src.mindmap.relationship_extractor import extract_and_enhance_relationships
-                
                 enhanced_clustering, relationship_summary = extract_and_enhance_relationships(
                     clustering_result, embeddings, cleaned_texts,
                     similarity_threshold=0.7, max_relationships=5
@@ -119,7 +107,7 @@ class MindmapClusteringSystem:
             # Extract texts properly
             if isinstance(data, dict):
                 if 'texts' in data:
-                    return data['texts']  # This is the correct field!
+                    return data['text']  # This is the correct field!
                 elif 'content' in data:
                     return data['content'] if isinstance(data['content'], list) else [data['content']]
                 else:

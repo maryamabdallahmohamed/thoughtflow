@@ -51,29 +51,29 @@ class MindmapCaptionGenerator:
         return result
 
 
-# Demo usage
-if __name__ == "__main__":
-    from src.mindmap.clustering_system import MindmapClusteringSystem
+# # Demo usage
+# if __name__ == "__main__":
+#     from src.mindmap.clustering_system import MindmapClusteringSystem
 
-    # Step 1: Cluster a small document
-    system = MindmapClusteringSystem()
-    sample_doc = {
-        "texts": [
-            "AI is transforming healthcare through diagnostics.",
-            "Natural language processing powers chatbots.",
-            "Computer vision enables self-driving cars.",
-            "Deep learning advances image recognition.",
-            "Machine learning improves recommendation systems."
-        ]
-    }
-    result = system.process_document(sample_doc, document_type="json")
+#     # Step 1: Cluster a small document
+#     system = MindmapClusteringSystem()
+#     sample_doc = {
+#         "texts": [
+#             "AI is transforming healthcare through diagnostics.",
+#             "Natural language processing powers chatbots.",
+#             "Computer vision enables self-driving cars.",
+#             "Deep learning advances image recognition.",
+#             "Machine learning improves recommendation systems."
+#         ]
+#     }
+#     result = system.process_document(sample_doc, document_type="json")
 
-    # Step 2: Generate and apply Groq captions
-    caption_gen = MindmapCaptionGenerator()
-    updated_result = caption_gen.apply_captions_to_mindmap(result)
+#     # Step 2: Generate and apply Groq captions
+#     caption_gen = MindmapCaptionGenerator()
+#     updated_result = caption_gen.apply_captions_to_mindmap(result)
 
-    # Step 3: Print updated structure
-    print("\n🌟 Updated Mindmap with AI-generated Captions 🌟")
-    print(f"Main Topic: {updated_result['mindmap']['main_topic']}")
-    for i, branch in enumerate(updated_result["mindmap"]["branches"]):
-        print(f"   Branch {i+1}: {branch['title']} ({branch['size']} concepts)")
+#     # Step 3: Print updated structure
+#     print("\n🌟 Updated Mindmap with AI-generated Captions 🌟")
+#     print(f"Main Topic: {updated_result['mindmap']['main_topic']}")
+#     for i, branch in enumerate(updated_result["mindmap"]["branches"]):
+#         print(f"   Branch {i+1}: {branch['title']} ({branch['size']} concepts)")

@@ -57,33 +57,3 @@ class MindmapDescriptionGenerator:
             branch["description"] = branch_desc
 
         return result
-
-
-# Demo usage
-if __name__ == "__main__":
-    from src.mindmap.clustering_system import MindmapClusteringSystem
-
-    # Cluster a small sample doc
-    system = MindmapClusteringSystem()
-    sample_doc = {
-        "texts": [
-            "AI in healthcare improves diagnostics and patient monitoring.",
-            "Natural language processing is key in building advanced chatbots.",
-            "Self-driving cars rely heavily on computer vision.",
-            "Deep learning enables breakthroughs in image recognition.",
-            "Recommendation systems benefit from machine learning algorithms."
-        ]
-    }
-    result = system.process_document(sample_doc, document_type="json")
-
-    # Apply descriptive captions
-    desc_gen = MindmapDescriptionGenerator()
-    updated_result = desc_gen.apply_descriptions_to_mindmap(result)
-
-    # Print updated with descriptions
-    print("\n📝 Updated Mindmap with Descriptions")
-    print(f"Main Topic: {updated_result['mindmap']['main_topic']}")
-    print(f"Overview: {updated_result['mindmap']['overview']}")
-    for i, branch in enumerate(updated_result["mindmap"]["branches"]):
-        print(f"   Branch {i+1}: {branch['title']}")
-        print(f"      Description: {branch['description']}")

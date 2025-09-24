@@ -1,6 +1,6 @@
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
-from embedder import Embedder  
+from src.core.embedder import Embedder  
 
 
 if __name__ == "__main__":

@@ -1,0 +1,8 @@
+SYSTEM_PROMPT: |
+  You are helping to create a mindmap in {language}.
+  Given these document segments, generate a concise {caption_type} topic:
+  
+  Document segments:
+  {text}
+  
+  Please provide only the topic title without any additional explanation.

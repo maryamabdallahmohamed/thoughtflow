@@ -2,7 +2,11 @@ from src.core.dynamic_clustering import create_dynamic_mindmap_clusters
 from src.core.embedder import Embedder
 from src.mindmap.relationship_extractor import extract_and_enhance_relationships
 from src.core.ingestion_pipeline import ingestion_pipeline
+from utils.language_detector import returnlang
+from utils.logging_handler import get_logger
 import json
+
+logging =get_logger("MindmapClusteringSystem")
 
 class MindmapClusteringSystem:
     """
@@ -25,17 +29,19 @@ class MindmapClusteringSystem:
 
         # Clean and segment texts
         cleaned_texts = ingestion_pipeline(texts)
-        print(f"📝 Processed {len(cleaned_texts)} text segments")
+        lang= returnlang(cleaned_texts[0])
+        logging.info("Detected language: %s",lang)
+        logging.info(f"📝 Processed {len(cleaned_texts)} text segments")
         
         if len(cleaned_texts) < 2:
             return self._handle_insufficient_data(cleaned_texts)
         
         # 2. Generate Embeddings
-        print("🔢 Generating embeddings...")
+        logging.info("🔢 Generating embeddings...")
         embeddings = self.embedder.encode(cleaned_texts)
         
         # 3. Dynamic Clustering
-        print("🎯 Applying dynamic clustering...")
+        logging.info("🎯 Applying dynamic clustering...")
         clustering_result = create_dynamic_mindmap_clusters(embeddings, cleaned_texts)
         
         # 4. Extract Relationships (FR2.3)
@@ -48,10 +54,10 @@ class MindmapClusteringSystem:
                 clustering_result = enhanced_clustering
                 
             except ImportError as e:
-                print(f"⚠️  Relationship extraction not available: {e}")
+                logging.info(f"⚠️  Relationship extraction not available: {e}")
                 relationship_summary = {'total_relationships': 0}
             except Exception as e:
-                print(f"⚠️  Relationship extraction failed: {e}")
+                logging.info(f"⚠️  Relationship extraction failed: {e}")
                 relationship_summary = {'total_relationships': 0}
         else:
             relationship_summary = {'total_relationships': 0}
@@ -73,13 +79,14 @@ class MindmapClusteringSystem:
                 )['mindmap']
                 
             except Exception as e:
-                print(f"⚠️  Mindmap relationship enhancement failed: {e}")
+                logging.info(f"⚠️  Mindmap relationship enhancement failed: {e}")
         
         return {
             'texts': cleaned_texts,
             'embeddings': embeddings,
             'clustering': clustering_result,
             'mindmap': mindmap_structure,
+            "language_used": lang,
             'relationships': relationship_summary,
             'metadata': {
                 'total_segments': len(cleaned_texts),
@@ -107,7 +114,7 @@ class MindmapClusteringSystem:
             # Extract texts properly
             if isinstance(data, dict):
                 if 'texts' in data:
-                    return data['text']  # This is the correct field!
+                    return data['text']
                 elif 'content' in data:
                     return data['content'] if isinstance(data['content'], list) else [data['content']]
                 else:
@@ -125,7 +132,7 @@ class MindmapClusteringSystem:
                 return [str(data)]
                 
         except Exception as e:
-            print(f"⚠️  JSON extraction error: {e}")
+            logging.info(f"⚠️  JSON extraction error: {e}")
             return [str(json_content)]
     
     def _handle_insufficient_data(self, texts):
@@ -252,81 +259,18 @@ class MindmapClusteringSystem:
             from utils.visualization_scripts import MindmapVisualizer
             
             if not result['clustering']:
-                print("⚠️  No clustering data available for visualization")
+                logging.info("⚠️  No clustering data available for visualization")
                 return
             
-            print(f"🎨 Creating {visualization_type} visualization...")
+            logging.info(f"🎨 Creating {visualization_type} visualization...")
             
             # Create visualizer instance and generate plots
             visualizer = MindmapVisualizer()
             visualizer.create_visualizations(result, visualization_type, save_path)
             
         except ImportError as e:
-            print(f"⚠️  Visualization dependencies not available: {e}")
-            print("💡 Install visualization dependencies: pip install matplotlib plotly seaborn networkx")
+            logging.info(f"⚠️  Visualization dependencies not available: {e}")
+            logging.info("💡 Install visualization dependencies: pip install matplotlib plotly seaborn networkx")
         except Exception as e:
-            print(f"❌ Visualization error: {e}")
-            print("💡 Make sure utils/visualization_scripts.py exists and is properly configured")
-
-# Demo function
-def demo_clustering_system():
-    """Demonstrate the clustering system with relationship extraction"""
-    
-    system = MindmapClusteringSystem()
-    
-    print("🧪 Testing Mindmap Clustering System with Relationship Extraction")
-    print("=" * 70)
-    
-    # Test with diverse content file path
-    result = system.process_document('/Users/maryamsaad/Documents/Graduation_Proj/junk/medium_GT.json', document_type="json", extract_relationships=True)
-    
-    print(f"\n📊 Clustering Results:")
-    print(f"   Segments: {result['metadata']['total_segments']}")
-    print(f"   Clusters: {result['metadata']['cluster_count']}")
-    print(f"   Quality: {result['metadata']['quality_score']:.3f}")
-    
-    print(f"\n🔗 Relationship Results (FR2.3):")
-    print(f"   Relationships extracted: {result['metadata']['relationships_extracted']}")
-    print(f"   Total relationships: {result['metadata']['total_relationships']}")
-    
-    if result['relationships']['total_relationships'] > 0:
-        rel_summary = result['relationships']
-        print(f"   Average per cluster: {rel_summary.get('average_per_cluster', 0):.1f}")
-        
-        if 'confidence_range' in rel_summary:
-            conf_range = rel_summary['confidence_range']
-            print(f"   Confidence range: {conf_range['min']:.3f} - {conf_range['max']:.3f}")
-            print(f"   Average confidence: {conf_range['average']:.3f}")
-    
-    print(f"\n🌳 Enhanced Mindmap Structure:")
-    for i, branch in enumerate(result['mindmap']['branches']):
-        print(f"   Branch {i+1}: {branch['title']} ({branch['size']} concepts)")
-        
-        # Show relationship information
-        if 'relationship_count' in branch:
-            print(f"      Relationships: {branch['relationship_count']}")
-            print(f"      Density: {branch.get('relationship_density', 0):.3f}")
-            
-            # Show sample relationships
-            if branch.get('relationships') and len(branch['relationships']) > 0:
-                print(f"      Sample connections:")
-                for rel in branch['relationships'][:2]:  # Show first 2
-                    source_concept = branch['concepts'][rel['source_index']]['display_text'][:40]
-                    target_concept = branch['concepts'][rel['target_index']]['display_text'][:40]
-                    print(f"         '{source_concept}...' → '{target_concept}...' ({rel['confidence']:.3f})")
-        
-        # Show first concept in each branch
-        if branch['concepts']:
-            first_concept = branch['concepts'][0]['display_text']
-            print(f"      Example concept: {first_concept}")
-    
-    # Optional visualization
-    print(f"\n🎨 Optional Visualization:")
-    print("To create visualizations with relationships, run:")
-    print("   system.visualize_mindmap(result, 'interactive')")
-    print("   system.visualize_mindmap(result, 'network')  # Best for showing relationships")
-    
-    return result
-
-if __name__ == "__main__":
-    demo_clustering_system()
+            logging.info(f"❌ Visualization error: {e}")
+            logging.info("💡 Make sure utils/visualization_scripts.py exists and is properly configured")

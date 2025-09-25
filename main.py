@@ -21,4 +21,3 @@ result = caption_gen.apply_captions_to_mindmap(result)
 desc_gen = MindmapDescriptionGenerator()
 result = desc_gen.apply_descriptions_to_mindmap(result)
 
-print(result)

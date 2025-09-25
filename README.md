@@ -63,19 +63,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md).
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
 
-- [sentence-transformers](https://github.com/UKPLab/sentence-transformers) for semantic embeddings
-- [BERTopic](https://github.com/MaartenGr/BERTopic) for topic modeling
-- [NetworkX](https://networkx.org/) for graph operations
-- [D3.js](https://d3js.org/) for visualization capabilities
-
-## 📞 Support
-
-- **Documentation**: [docs.mindmapbuilder.com](https://docs.mindmapbuilder.com)
-- **Issues**: [GitHub Issues](https://github.com/username/ai-mindmap-builder/issues)  
-- **Discussions**: [GitHub Discussions](https://github.com/username/ai-mindmap-builder/discussions)
-- **Email**: support@mindmapbuilder.com
 
 ---
 

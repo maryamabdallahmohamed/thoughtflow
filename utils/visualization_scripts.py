@@ -429,8 +429,3 @@ def visualize_mindmap_result(result, visualization_type='all', save_path=None):
     """
     visualizer = MindmapVisualizer()
     visualizer.create_visualizations(result, visualization_type, save_path)
-
-if __name__ == "__main__":
-    print("🎨 Mindmap Visualization Scripts")
-    print("This module provides visualization capabilities for mindmap clustering results.")
-    print("Import and use MindmapVisualizer class or visualize_mindmap_result function.")

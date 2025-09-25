@@ -21,6 +21,12 @@ def normalize_arabic(text: str) -> str:
     text = re.sub("ئ", "ي", text)        # convert yaa-hamza
     text = re.sub("ة", "ه", text)        # unify taa marbouta
     text = re.sub("ـ+", "", text)        # remove tatweel
+    text= re.sub("[*#]","").replace("\n"," ")
+    text= re.sub("\n\n"," ")
+    text= re.sub("\n"," ")
+    text= re.sub("\n*"," ")
+    
+
     text = re.sub(r"(.)\1{2,}", r"\1", text)  # collapse elongations
     return text
 
@@ -39,7 +45,8 @@ def remove_stopwords(words: list) -> list:
 
 def clean_and_segment(text: str) -> str:
     """
-    Full pipeline: normalize, remove diacritics, segment, remove stopwords.
+    Full pipeline: normalize, remove diacritics, segment, remove stopwords,
+    and strip Farasa '+' symbols.
     """
     if not text or not text.strip():
         return ""
@@ -48,17 +55,24 @@ def clean_and_segment(text: str) -> str:
         text = normalize_arabic(text)
         text = remove_diacritics(text)
 
-        # Segment using Farasa
+        # Use Farasa to segment
         segmented = farasa.segment(text)
 
-        # Stopword removal
+        # Remove Farasa "+" markers
+        segmented = segmented.replace("+", " ")
+
+        # Tokenize
         tokens = segmented.split()
+
+        # Stopword removal
         tokens = remove_stopwords(tokens)
 
         return " ".join(tokens)
+
     except Exception as e:
         print(f"[ERROR] Farasa failed on text: {text}\nReason: {e}")
-        return text  # fallback
+        return text
+
 
 def split_into_sentences(text: str) -> list:
     """
@@ -67,26 +81,35 @@ def split_into_sentences(text: str) -> list:
     # Split on common sentence endings
     sentences = re.split(r'[.!?؟।\n]+', text)
     
-    # Clean and filter sentences
-    sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+    # Clean, filter, and remove extra symbols from each sentence
+    sentences = [
+        remove_extra_symbols(s.strip()) 
+        for s in sentences 
+        if s.strip() and len(s.strip()) > 10
+    ]
     
     return sentences
 
+def remove_extra_symbols(text: str) -> str:
+    text = re.sub(r"[\[\]\*\n\.+،,:;”“\"\'\-–—_]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
 def ingestion_pipeline(raw_texts):
-    """
-    Ingests, cleans, and normalizes a list of texts or a single text.
-    """
-    # Handle both single string and list of strings
     if isinstance(raw_texts, str):
-        # Split single text into sentences first
         sentences = split_into_sentences(raw_texts)
         raw_texts = sentences
-    
+
     processed = []
-    for t in raw_texts:
+    for idx, t in enumerate(raw_texts):
         normalized = clean_and_segment(t)
-        if normalized.strip():  # Only add non-empty results
-            processed.append(normalized)
+        if normalized.strip():  
+            processed.append({
+                "index": idx,
+                "original": t,
+                "cleaned": normalized
+            })
     return processed
 
 

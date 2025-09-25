@@ -7,7 +7,7 @@ from src.loader.json_loader import JSONPreprocessor
 system=MindmapClusteringSystem()
 processor= JSONPreprocessor()
 #load json data
-path='/Users/maryamsaad/Documents/Graduation_Proj/junk/medium_GT.json'
+path='/Users/maryamsaad/Documents/Graduation_Proj/junk/chapter4_GT.json'
 data=processor.load_and_preprocess_data(path)
 print(data)
 # Basic clustering

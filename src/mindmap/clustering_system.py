@@ -27,14 +27,17 @@ class MindmapClusteringSystem:
         """
         
 
-        # Clean and segment texts
         cleaned_texts = ingestion_pipeline(texts)
-        lang= returnlang(cleaned_texts[0])
-        logging.info("Detected language: %s",lang)
+        cleaned_texts = [item["cleaned"] for item in cleaned_texts]
+        
+        # Detect language from the first text (ensure it's a string)
+        sample_text = cleaned_texts[0] if cleaned_texts and isinstance(cleaned_texts[0], str) else " ".join(cleaned_texts[:3])
+        lang = returnlang(sample_text)
+        logging.info("Detected language: %s", lang)
         logging.info(f"📝 Processed {len(cleaned_texts)} text segments")
         
         if len(cleaned_texts) < 2:
-            return self._handle_insufficient_data(cleaned_texts)
+            return self._handle_insufficient_data(cleaned_texts, lang)
         
         # 2. Generate Embeddings
         logging.info("🔢 Generating embeddings...")
@@ -135,7 +138,7 @@ class MindmapClusteringSystem:
             logging.info(f"⚠️  JSON extraction error: {e}")
             return [str(json_content)]
     
-    def _handle_insufficient_data(self, texts):
+    def _handle_insufficient_data(self, texts, lang):
         """Handle cases with very little data"""
         return {
             'texts': texts,
@@ -146,6 +149,7 @@ class MindmapClusteringSystem:
                 'branches': [],
                 'structure': 'single_node'
             },
+            'language_used': lang,
             'relationships': {'total_relationships': 0},
             'metadata': {
                 'total_segments': len(texts),

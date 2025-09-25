@@ -13,11 +13,6 @@ class MindmapCaptionGenerator:
         """
         Generate a caption for a branch or the main topic.
         """
-        # Auto-detect language if not provided
-        if language_used is None:
-            sample_text = " ".join(branch_texts[:3])  # Use first few texts for detection
-            language_used = returnlang(sample_text)
-        
         prompt = self._build_prompt(branch_texts, language_used, caption_type)
         completion = llm.chat_with_groq(prompt)
         

@@ -23,7 +23,7 @@ class MindmapDescriptionGenerator:
         """
         # Auto-detect language if not provided
         if language_used is None:
-            sample_text = " ".join(node_texts[:3])  # Use first few texts for detection
+            sample_text = " ".join(node_texts)  #
             language_used = returnlang(sample_text)
         
         prompt = self._build_prompt(node_texts, language_used, caption_type)

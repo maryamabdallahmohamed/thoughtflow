@@ -8,3 +8,4 @@ __pycache__
 .Ds_Store
 archive
 *.png
+frontend/node_modules

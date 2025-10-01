@@ -14,8 +14,7 @@ def returnlang(text):
         detected = detect(text)
         lang_mapping = {
             'ar': 'Arabic',
-            'en': 'English',
-            'fr': 'French'
+            'en': 'English'
         }
         return lang_mapping.get(detected, 'English')
     except Exception as e:

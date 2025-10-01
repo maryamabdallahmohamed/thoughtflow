@@ -1,7 +1,7 @@
 SYSTEM_PROMPT: |
   You are helping to create descriptive captions for an interactive mindmap in {language}.
   
-  Generate a {caption_type} descriptive caption for the following content:
+  Generate a  descriptive caption for the following content:
   
   Content:
   {text}

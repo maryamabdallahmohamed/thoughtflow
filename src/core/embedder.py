@@ -7,7 +7,7 @@ DEVICE= os.getenv("DEVICE")
 CACHE_DIR = os.getenv("CACHE_DIR")
 class Embedder:
     def __init__(self):
-        self.model = SentenceTransformer('sentence-transformers/gtr-t5-base',
+        self.model = SentenceTransformer('sentence-transformers/LaBSE',
                                          device=DEVICE,
                                          cache_folder=CACHE_DIR)
         

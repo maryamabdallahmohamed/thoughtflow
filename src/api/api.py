@@ -3,26 +3,43 @@ import tempfile
 import os
 import re
 import numpy as np
-from fastapi import FastAPI, UploadFile, File
+from typing import Union, List, Dict, Any
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
-# Import your components
-from src.mindmap.clustering_system import MindmapClusteringSystem
-from src.mindmap.generate_descriptive_captions import MindmapDescriptionGenerator
-from src.mindmap.generate_topic_captions import MindmapCaptionGenerator
+from src.core.mindmap_builder import build_mindmap
 from src.loader.json_loader import JSONPreprocessor
 from src.loader.pdf_loader import pdf_to_text
 
-app = FastAPI(title="Mindmap API")
+app = FastAPI(
+    title="Mindmap API",
+    description="API for generating hierarchical mindmaps from documents",
+    version="1.0.0"
+)
 
-# Initialize pipeline components
-system = MindmapClusteringSystem()
+# Add CORS middleware for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 processor = JSONPreprocessor()
-caption_gen = MindmapCaptionGenerator()
-desc_gen = MindmapDescriptionGenerator()
+
+# Supported file extensions
+SUPPORTED_EXTENSIONS = {".json", ".pdf"}
+
 
 # --- Helper for JSON-safe conversion ---
-def make_json_safe(obj):
+def make_json_safe(obj: Any) -> Any:
+    """
+    Recursively convert numpy types and other non-JSON-serializable objects
+    to JSON-safe Python types.
+    """
     if isinstance(obj, (set, tuple)):
         return list(obj)
     elif isinstance(obj, np.integer):
@@ -42,99 +59,222 @@ def make_json_safe(obj):
 
 @app.get("/")
 def root():
-    return {"message": "Mindmap API is running 🚀"}
+    """Health check endpoint"""
+    return {
+        "message": "Mindmap API is running 🚀",
+        "version": "1.0.0",
+        "endpoints": {
+            "preprocess": "/preprocess/",
+            "generate_mindmap": "/generate-mindmap",
+            "generate_from_file": "/generate-mindmap-from-file"
+        }
+    }
+
+
+@app.get("/health")
+def health_check():
+    """Detailed health check"""
+    return {
+        "status": "healthy",
+        "services": {
+            "embedder": "ready",
+            "processor": "ready"
+        }
+    }
 
 
 # --- STEP 1: Upload + Preprocess JSON or PDF ---
 @app.post("/preprocess/")
 async def preprocess_file(file: UploadFile = File(...)):
+    """
+    Upload and preprocess a JSON or PDF file.
+    
+    Returns the extracted text content ready for mindmap generation.
+    """
     tmp_path = None
     try:
+        # Validate file extension
+        suffix = os.path.splitext(file.filename)[-1].lower()
+        if suffix not in SUPPORTED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {suffix}. Only {', '.join(SUPPORTED_EXTENSIONS)} are allowed."
+            )
+
         # Save uploaded file temporarily
-        suffix = os.path.splitext(file.filename)[-1].lower()
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             contents = await file.read()
+            if not contents:
+                raise HTTPException(status_code=400, detail="Empty file uploaded")
             tmp.write(contents)
             tmp_path = tmp.name
 
-        # Detect file type using regex
-        if re.search(r"\.json$", file.filename, re.IGNORECASE):
+        # Process based on file type
+        if suffix == ".json":
             data = processor.load_and_preprocess_data(tmp_path)
-        elif re.search(r"\.pdf$", file.filename, re.IGNORECASE):
-            data = pdf_to_text(tmp_path)  # Returns list of text segments
+        elif suffix == ".pdf":
+            data = pdf_to_text(tmp_path)
         else:
-            return {"error": "Unsupported file type. Only .json and .pdf are allowed."}
+            raise HTTPException(status_code=400, detail="Unsupported file type")
 
         if not data:
-            return {"error": "No valid text data found"}
+            raise HTTPException(
+                status_code=400,
+                detail="No valid text data found in the file"
+            )
 
-        return {"processed_text": data}
+        # Handle different data types
+        if isinstance(data, list):
+            processed_text = "\n".join(str(item) for item in data if item)
+        else:
+            processed_text = str(data)
 
+        return {
+            "success": True,
+            "filename": file.filename,
+            "processed_text": processed_text,
+            "text_length": len(processed_text)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
 
-# --- STEP 2: Clustering ---
-@app.post("/cluster/")
-async def cluster_text(data: dict):
+# --- STEP 2: Generate Mindmap from Text ---
+class MindmapRequest(BaseModel):
+    document: str = Field(..., description="Text document to generate mindmap from")
+    lang: str = Field(default="en", description="Language code")
+    max_depth: int = Field(default=3, ge=1, le=10, description="Maximum depth of clustering")
+    min_size: int = Field(default=2, ge=1, le=100, description="Minimum cluster size")
+
+
+@app.post("/generate-mindmap")
+def generate_mindmap(req: MindmapRequest):
+    """
+    Generate a mindmap from provided text document.
+    
+    Returns a hierarchical JSON structure representing the mindmap.
+    """
     try:
-        clustered = system.process_document(data["processed_text"])
-        return JSONResponse(content=make_json_safe(clustered))
+        if not req.document or not req.document.strip():
+            raise HTTPException(status_code=400, detail="Document text cannot be empty")
+
+        # Generate mindmap
+        mindmap_data = build_mindmap(
+            req.document,
+            req.lang,
+            req.max_depth,
+            req.min_size
+        )
+
+        # Ensure JSON-safe output
+        safe_mindmap = make_json_safe(mindmap_data)
+
+        return {
+            "success": True,
+            "mindmap": safe_mindmap,
+            "metadata": {
+                "lang": req.lang,
+                "max_depth": req.max_depth,
+                "min_size": req.min_size,
+                "document_length": len(req.document)
+            }
+        }
+
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating mindmap: {str(e)}"
+        )
 
 
-# --- STEP 3: Add Captions ---
-@app.post("/caption/")
-async def add_captions(mindmap: dict):
-    try:
-        with_captions = caption_gen.apply_captions_to_mindmap(mindmap)
-        return JSONResponse(content=make_json_safe(with_captions))
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# --- STEP 4: Add Descriptions ---
-@app.post("/describe/")
-async def add_descriptions(mindmap: dict):
-    try:
-        with_desc = desc_gen.apply_descriptions_to_mindmap(mindmap)
-        return JSONResponse(content=make_json_safe(with_desc))
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# --- STEP 5: Full Pipeline (Shortcut) ---
-@app.post("/mindmap/")
-async def generate_mindmap(file: UploadFile = File(...)):
+# --- STEP 3: Combined endpoint - Upload file and generate mindmap ---
+@app.post("/generate-mindmap-from-file")
+async def generate_mindmap_from_file(
+    file: UploadFile = File(...),
+    lang: str = "en",
+    max_depth: int = 3,
+    min_size: int = 2
+):
+    """
+    Upload a file (JSON or PDF) and directly generate a mindmap.
+    
+    This combines preprocessing and mindmap generation in one step.
+    """
     tmp_path = None
     try:
-        # Save uploaded file
+        # Validate file extension
         suffix = os.path.splitext(file.filename)[-1].lower()
+        if suffix not in SUPPORTED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {suffix}. Only {', '.join(SUPPORTED_EXTENSIONS)} are allowed."
+            )
+
+        # Save and process file
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             contents = await file.read()
+            if not contents:
+                raise HTTPException(status_code=400, detail="Empty file uploaded")
             tmp.write(contents)
             tmp_path = tmp.name
 
-        # Detect file type
-        if re.search(r"\.json$", file.filename, re.IGNORECASE):
+        # Extract text
+        if suffix == ".json":
             data = processor.load_and_preprocess_data(tmp_path)
-        elif re.search(r"\.pdf$", file.filename, re.IGNORECASE):
-            data = pdf_to_text(tmp_path)  # Returns list of text segments
+        elif suffix == ".pdf":
+            data = pdf_to_text(tmp_path)
         else:
-            return {"error": "Unsupported file type. Only .json and .pdf are allowed."}
+            raise HTTPException(status_code=400, detail="Unsupported file type")
 
         if not data:
-            return {"error": "No valid text data found"}
+            raise HTTPException(status_code=400, detail="No valid text data found")
 
-        # Run full pipeline
-        result = system.process_document(data)
-        result = caption_gen.apply_captions_to_mindmap(result)
-        result = desc_gen.apply_descriptions_to_mindmap(result)
+        # Convert to string
+        if isinstance(data, list):
+            document_text = "\n".join(str(item) for item in data if item)
+        else:
+            document_text = str(data)
 
-        return JSONResponse(content=make_json_safe(result))
+        # Generate mindmap
+        mindmap_data = build_mindmap(document_text, lang, max_depth, min_size)
+        safe_mindmap = make_json_safe(mindmap_data)
 
+        return {
+            "success": True,
+            "filename": file.filename,
+            "mindmap": safe_mindmap,
+            "metadata": {
+                "lang": lang,
+                "max_depth": max_depth,
+                "min_size": min_size,
+                "document_length": len(document_text)
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating mindmap from file: {str(e)}"
+        )
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

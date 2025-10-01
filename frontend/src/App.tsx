@@ -16,26 +16,25 @@ export default function App() {
     setCurrentState('processing');
 
     try {
-      // Create FormData to send the file
-      const formData = new FormData();
-      formData.append('file', file);
+      // Read the file as text (for .json or .txt files)
+      const docText = await file.text();
 
       // Send POST request to backend API
-      const response = await fetch('http://localhost:8000/mindmap/', {
+      const response = await fetch('/generate-mindmap', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document: docText, lang: 'en', max_depth: 3 }),
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      setMindmapData(data);
+      const mindmapData = await response.json();
+      setMindmapData(mindmapData);
       setCurrentState('mindmap');
     } catch (error) {
       console.error('Error generating mindmap:', error);
-      // In a real app, you'd show an error state here
       setCurrentState('landing');
     }
   };

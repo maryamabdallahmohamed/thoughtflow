@@ -16,21 +16,34 @@ export default function App() {
     setCurrentState('processing');
 
     try {
-      // Read the file as text (for .json or .txt files)
-      const docText = await file.text();
+      // Step 1: Preprocess the file (extract text)
+      const formData = new FormData();
+      formData.append('file', file);
 
-      // Send POST request to backend API
-      const response = await fetch('/generate-mindmap', {
+      const preprocessResponse = await fetch('http://localhost:8000/preprocess/', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!preprocessResponse.ok) {
+        throw new Error(`Preprocess error! status: ${preprocessResponse.status}`);
+      }
+
+      const preprocessData = await preprocessResponse.json();
+      const docText = preprocessData.processed_text;
+
+      // Step 2: Generate mindmap from extracted text
+      const mindmapResponse = await fetch('http://localhost:8000/generate-mindmap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ document: docText, lang: 'en', max_depth: 3 }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!mindmapResponse.ok) {
+        throw new Error(`Mindmap error! status: ${mindmapResponse.status}`);
       }
 
-      const mindmapData = await response.json();
+      const mindmapData = await mindmapResponse.json();
       setMindmapData(mindmapData);
       setCurrentState('mindmap');
     } catch (error) {

@@ -65,6 +65,6 @@ def recursive_cluster(sentences, embeddings, depth=0, max_depth_base=3, min_size
             lang=lang
         )
         if child_node:
-            node.children.append(child_node)  # ✅ Only MindmapNode objects as children
+            node.children.append(child_node)
 
     return node

@@ -1,8 +1,14 @@
 SYSTEM_PROMPT: |
-  You are helping to create a mindmap in {language}.
-  Given these document segments, generate a concise {caption_type} topic:
+  Generate a concise mindmap topic label in {language} for the given text.
   
-  Document segments:
+  Examples:
+  Text: "الذكاء الاصطناعي يغير العالم. التعلم الآلي والشبكات العصبية."
+  Label: الذكاء الاصطناعي والتعلم الآلي
+  
+  Text: "Climate change affects weather. Rising temperatures cause storms."
+  Label: Climate Change Impact
+  
+  Now generate a label for:
   {text}
   
-  Please provide only the topic title without any additional explanation.
+  Label (max 8 words, no formatting):

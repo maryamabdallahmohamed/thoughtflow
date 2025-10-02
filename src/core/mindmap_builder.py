@@ -3,37 +3,34 @@ import numpy as np
 from src.core.node import MindmapNode
 from src.core.dynamic_clustering import recursive_cluster
 from src.core.embedder import Embedder
-
+from utils.language_detector import returnlang
 embedder = Embedder()
 
-
-def build_mindmap(doc, lang="en", max_depth=3, min_size=2):
+# In mindmap_builder.py
+def build_mindmap(doc, lang=None, max_depth=3, min_size=2):
     """
     Build a hierarchical mindmap from a document.
-    
-    Args:
-        doc: Input document text
-        lang: Language code (default: "en")
-        max_depth: Maximum depth of clustering (default: 3)
-        min_size: Minimum cluster size (default: 2)
-    
-    Returns:
-        Dictionary representation of the mindmap tree
     """
     # Split document into sentences
-    sentences = doc.split("\n")  # or use your simple_sentence_split function
+    sentences = doc.split("\n")
+    
+    # Detect language if not provided
+    if lang is None:
+        from utils.language_detector import returnlang
+        lang = returnlang(doc)  # Pass the full document string
     
     # Encode sentences
     embeddings = embedder.encode(sentences)
     
-    # Build the tree recursively
-    root_node = cluster_to_node(
+    # Build the tree using recursive_cluster
+    root_node = recursive_cluster(
         sentences, 
         embeddings, 
         depth=0, 
+        max_depth_base=max_depth,
+        min_size_base=min_size,
         cluster_id="root",
-        max_depth=max_depth,
-        min_size=min_size
+        lang=lang  # Pass detected language
     )
     
     return root_node.to_dict() if root_node else {}

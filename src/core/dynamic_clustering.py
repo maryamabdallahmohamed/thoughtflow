@@ -25,17 +25,17 @@ def dynamic_min_size(n_samples, base_min=2):
     return max(1, int(n_samples * 0.15))
 
 # --- Recursive Hierarchical Clustering ---
-def recursive_cluster(
-    sentences, embeddings, depth=0, max_depth_base=3, min_size_base=2, cluster_id="root", lang="en"
-):
+def recursive_cluster(sentences, embeddings, depth=0, max_depth_base=3, min_size_base=2, cluster_id="root", lang=None):
     if len(sentences) < min_size_base:
-        return MindmapNode(cluster_id,children=sentences)
+        leaf_label = get_topic_label(sentences, lang=lang)
+        return MindmapNode(cluster_id, label=leaf_label, children=[])  
 
     max_depth = dynamic_max_depth(depth, max_depth_base)
     min_size = dynamic_min_size(len(sentences), min_size_base)
 
     if depth >= max_depth or len(sentences) < min_size:
-        return MindmapNode(cluster_id,children=sentences)
+        leaf_label = get_topic_label(sentences, lang=lang)
+        return MindmapNode(cluster_id, label=leaf_label, children=[])  
 
     # Dimensionality reduction
     svd = TruncatedSVD(n_components=min(embeddings.shape[1], 50))
@@ -48,7 +48,7 @@ def recursive_cluster(
 
     # Create node
     cluster_label = get_topic_label(sentences, lang=lang)
-    node = MindmapNode(cluster_id, label=cluster_label,children=sentences)
+    node = MindmapNode(cluster_id, label=cluster_label, children=[])
 
     # Recurse for subclusters
     for sub_label in set(labels):
@@ -65,6 +65,6 @@ def recursive_cluster(
             lang=lang
         )
         if child_node:
-            node.add_child(child_node)
+            node.children.append(child_node)  # ✅ Only MindmapNode objects as children
 
     return node

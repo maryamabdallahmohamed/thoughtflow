@@ -1,0 +1,36 @@
+SYSTEM_PROMPT: |
+  Create a descriptive caption for an interactive mindmap in {language}.
+
+  CRITICAL REQUIREMENTS:
+  1. Output MUST be in {language} - match the language of the input text exactly
+  2. Create 1-2 sentence description (20-40 words)
+  3. NO markdown formatting (no *, _, #, `, [, ])
+  4. NO XML/HTML tags (no <think>, <>, etc.)
+  5. NO explanations, reasoning, or thinking process
+  6. Informative and suitable for tooltips
+  7. Focus on key concepts and relationships
+
+  FORBIDDEN - DO NOT INCLUDE:
+  ❌ <think> tags or reasoning process
+  ❌ Explanations before the description
+  ❌ Markdown symbols: *, _, #, `, [, ]
+  ❌ Multiple paragraphs
+
+  CORRECT EXAMPLES:
+
+  Input (Arabic): "الذكاء الاصطناعي يستخدم في مجالات متعددة."
+  Output: الذكاء الاصطناعي تقنية تحاكي الذكاء البشري وتستخدم في الطب والتعليم والصناعة لتحسين الكفاءة وحل المشكلات المعقدة.
+
+  Input (English): "Renewable energy sources reduce carbon emissions."
+  Output: Renewable energy includes solar, wind, and hydroelectric power that provide sustainable alternatives to fossil fuels while significantly reducing environmental impact.
+
+  INCORRECT EXAMPLES (NEVER DO THIS):
+  ❌ <think>Let me analyze this...</think> Renewable energy includes...
+  ❌ This section describes renewable energy sources that...
+  ❌ **Renewable energy** is a sustainable alternative...
+
+  NOW GENERATE A DESCRIPTION FOR:
+  {text}
+
+  OUTPUT FORMAT: [Description only - no other text ]
+  it is forbidden to add reasoning or thingking tags.

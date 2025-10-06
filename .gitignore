@@ -9,3 +9,6 @@ __pycache__
 archive
 *.png
 frontend/node_modules
+.kiro
+node_modules
+node_modules/

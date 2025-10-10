@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # Embedding Settings
     EMBEDDING_MODEL: str = "sentence-transformers/LaBSE"
-    EMBEDDING_DEVICE: str = os.getenv("DEVICE", "cpu")
+    EMBEDDING_DEVICE: str = os.getenv("DEVICE", "mps")
     EMBEDDING_CACHE_DIR: Optional[str] = os.getenv("CACHE_DIR", None)
     EMBEDDING_BATCH_SIZE: int = 16
 
@@ -56,10 +56,14 @@ class Settings(BaseSettings):
     PROMPTS_DIR: str = "prompts"
     TOPIC_LABEL_PROMPT: str = "topic_system_prompt.yaml"
     DESCRIPTIVE_PROMPT: str = "descriptive_system_prompt.yaml"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    # Pydantic v2 uses `model_config` instead of `Config`.
+    # Configure all model settings here to avoid the "Config and model_config"
+    # conflict. We allow extra env vars and set the env file and case sensitivity.
+    model_config = {
+        "extra": "allow",
+        "env_file": ".env",
+        "case_sensitive": True,
+    }
 
 
 # Global settings instance

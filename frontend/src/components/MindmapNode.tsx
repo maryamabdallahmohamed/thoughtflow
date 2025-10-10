@@ -77,36 +77,6 @@ export function MindmapNode({ node, onToggle, isExpanded, level }: MindmapNodePr
           </motion.div>
         )}
       </motion.div>
-
-      {/* Render children */}
-      {isExpanded && node.children && (
-        <>
-          {node.children.map((child, index) => (
-            <div key={child.id}>
-              {/* Connection line */}
-              <svg className="absolute pointer-events-none">
-                <motion.path
-                  d={`M ${nodeSize === 'large' ? 120 : nodeSize === 'medium' ? 100 : 80} ${nodeSize === 'large' ? 25 : nodeSize === 'medium' ? 20 : 15} 
-                      Q ${child.x - node.x - 50} ${(child.y - node.y) / 2} 
-                      ${child.x - node.x} ${child.y - node.y + 15}`}
-                  stroke="#a78bfa"
-                  strokeWidth="2"
-                  fill="none"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
-                  transition={{ duration: 0.8, delay: 0.2 }}
-                />
-              </svg>
-              <MindmapNode
-                node={child}
-                onToggle={onToggle}
-                isExpanded={true}
-                level={level + 1}
-              />
-            </div>
-          ))}
-        </>
-      )}
     </motion.div>
   );
 }

@@ -5,7 +5,7 @@ from nltk.corpus import stopwords
 import nltk
 
 
-# nltk.download("stopwords")
+nltk.download("stopwords")
 
 stopwords_ar = set(stopwords.words("arabic"))
 stopwords_en = set(stopwords.words("english"))

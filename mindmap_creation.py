@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # General Configuration
 CONFIG = {
-    "PDF_PATH": "/Users/maryamsaad/Documents/Graduation_Proj/junk/corrected_ocr_results.json",
+    "PDF_PATH": "/Users/maryamsaad/Documents/grad_data/ground_truth_files/unit3ground_truth_clean.json",
     "OUTPUT_FILE": "enriched_mindmap.json",
     "EMBEDDING_BATCH_SIZE": 50,
     "MAX_CLUSTER_DEPTH": 3,
@@ -59,34 +59,64 @@ def test_llm_connection(llm_client: GroqClient) -> bool:
         logger.error(f"❌ LLM test failed: {e}")
         return False
 
-def enrich_node_recursively(node: dict, depth: int = 0, parent_label: str = None,lang='Arabic') -> dict:
-    """Recursively enrich tree nodes with labels and descriptions using LLM services."""
-    if "texts" in node:
-        num_texts = len(node["texts"])
-        logger.info(f"Processing node at depth {depth} with {num_texts} texts.")
-        
+def enrich_node_recursively(node: dict, depth: int = 0, parent_label: str = None, lang: str = 'Arabic') -> dict:
+    """Recursively enrich tree nodes with labels and descriptions using LLM services.
+
+    Previously, only nodes containing a "texts" key were enriched. Internal
+    branch nodes created by clustering often don't carry "texts" directly,
+    which resulted in missing labels in the visualization. We now also enrich
+    such internal nodes by sampling a few texts from their descendants.
+    """
+
+    def _collect_text_samples(n: dict, limit: int = 30) -> list[str]:
+        """Collect up to `limit` text samples from the subtree rooted at `n`."""
+        samples: list[str] = []
+
+        # If this node has texts, take from here first
+        texts_here = n.get("texts") or []
+        if texts_here:
+            samples.extend(texts_here[:limit])
+        # If still need more, collect from children breadth-first
+        if len(samples) < limit:
+            for child in (n.get("clusters") or {}).values():
+                if len(samples) >= limit:
+                    break
+                child_samples = _collect_text_samples(child, limit - len(samples))
+                samples.extend(child_samples)
+        return samples
+
+    # Prepare candidate texts either from this node or its descendants
+    candidate_texts = node.get("texts")
+    if not candidate_texts:
+        # Internal node: aggregate some texts from children for labeling/description
+        candidate_texts = _collect_text_samples(node, limit=30)
+
+    if candidate_texts:
+        logger.info(f"Processing node at depth {depth} with {len(candidate_texts)} aggregated texts.")
         try:
             # Generate label
-            label_obj = labeler_service.generate_label(node["texts"], depth, parent_label,lang=lang)
+            label_obj = labeler_service.generate_label(candidate_texts, depth, parent_label, lang=lang)
             node["label"] = label_obj.label
             logger.debug(f"Generated label: {label_obj.label}")
             time.sleep(CONFIG["LLM_SLEEP_TIME"])
 
             # Generate description
-            desc = describer_service.generate_description(node["texts"], label_obj.label, depth,lang)
+            desc = describer_service.generate_description(candidate_texts, label_obj.label, depth, lang)
             node["description"] = desc
             logger.debug(f"Generated description: {desc[:50]}...")
             time.sleep(CONFIG["LLM_SLEEP_TIME"])
-        
         except Exception as e:
             logger.error(f"❌ Error enriching node at depth {depth}: {e}")
-            node["label"] = "Error Node"
-            node["description"] = "Failed to generate description"
+            node["label"] = node.get("label") or "Error Node"
+            node["description"] = node.get("description") or "Failed to generate description"
+    else:
+        logger.debug(f"Node at depth {depth} has no texts even after aggregation; skipping LLM enrichment.")
 
+    # Recurse into children
     if "clusters" in node:
         logger.debug(f"Recursing into {len(node['clusters'])} child clusters at depth {depth}.")
-        for child in node["clusters"].values():
-            enrich_node_recursively(child, depth + 1, node.get("label"),lang)
+        for child in node.get("clusters", {}).values():
+            enrich_node_recursively(child, depth + 1, node.get("label"), lang)
 
     return node
 

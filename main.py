@@ -1,22 +1,31 @@
 """
-ThoughtFlow Mindmap Creator - Main Script
+ThoughtFlow Mindmap API - FastAPI server
 
-A standalone script to generate mindmaps from documents using embeddings, clustering, and LLM enrichment.
+Exposes endpoints to upload a file and generate a mindmap.
+Front-end expects:
+  - POST /upload (multipart form): returns { file_path }
+  - POST /generate_mindmap (json body { file_path }): returns { mindmap: <tree> }
 """
-import numpy as np
 import json
 import logging
 import time
 import sys
 from pathlib import Path
+from typing import List, Optional
+
+import numpy as np
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 # Add project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 # --- 1. Imports ---
-# Grouped by functionality (Loaders, Core Processing, Infrastructure, Utils, Visualizer)
 from backend.src.loaders.upload_json import JSONPreprocessor
+from backend.src.loaders.upload_script import pdf_to_paragraphs
 from backend.src.core.cleaning_script import preprocess
 from backend.src.core.dynamic_clustering import recursive_cluster
 from backend.src.core.node_labeler import NodeLabelerService
@@ -25,28 +34,28 @@ from backend.src.core.tree_namer import TreeNamerService
 from backend.utils.language_detector import returnlang
 from backend.infrastructure.embedder import get_embedding_service
 from backend.infrastructure.llm import GroqClient
-from backend.src.visualizers.mindmap_visualizer import visualize_mindmap_tree
 from config.settings import settings
 
 # --- 2. Configuration & Initialization ---
-# Configure logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("mindmap.api")
 
-# General Configuration (using settings)
+UPLOAD_DIR = project_root / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 CONFIG = {
-    "PDF_PATH": "/Users/maryamsaad/Documents/Graduation_Proj/junk/corrected_ocr_results.json",  # TODO: Make configurable
     "OUTPUT_FILE": "enriched_mindmap.json",
     "EMBEDDING_BATCH_SIZE": settings.EMBEDDING_BATCH_SIZE,
-    "MAX_CLUSTER_DEPTH": settings.MAX_DEPTH_LIMIT,
-    "MIN_CLUSTER_SIZE": settings.MIN_SIZE_LIMIT,
-    "LLM_SLEEP_TIME": 0.5  # Time to wait between LLM calls to avoid rate limits
+    # Prefer sane defaults; the LIMIT values are caps, not good operational defaults.
+    "MAX_CLUSTER_DEPTH": settings.DEFAULT_MAX_DEPTH,
+    "MIN_CLUSTER_SIZE": settings.DEFAULT_MIN_SIZE,
+    "LLM_SLEEP_TIME": 0.5,
 }
 
-# Service Initialization (can be done once)
+# Service Initialization (singletons)
 json_preprocessor = JSONPreprocessor()
 tree_namer_service = TreeNamerService()
 llm_client = GroqClient()
@@ -55,164 +64,188 @@ labeler_service = NodeLabelerService()
 describer_service = NodeDescriptionService()
 
 # --- 3. Core Functions ---
-
-def test_llm_connection(llm_client: GroqClient) -> bool:
-    """Test if GroqClient is working before processing."""
+def test_llm_connection() -> bool:
     logger.info("Starting LLM connection test...")
     try:
         test_response = llm_client.generate("Say 'Hello, I am working!' in one sentence.")
         if test_response and test_response.strip():
             logger.info(f"✅ LLM test successful: {test_response[:50]}...")
             return True
-        else:
-            logger.error("❌ LLM returned empty response in test.")
-            return False
+        logger.error("❌ LLM returned empty response in test.")
+        return False
     except Exception as e:
         logger.error(f"❌ LLM test failed: {e}")
         return False
 
-def enrich_node_recursively(node: dict, depth: int = 0, parent_label: str = None, lang='Arabic') -> dict:
-    """Recursively enrich tree nodes with labels and descriptions using LLM services."""
-    if "texts" in node:
-        num_texts = len(node["texts"])
-        logger.info(f"Processing node at depth {depth} with {num_texts} texts.")
-        
+
+def enrich_node_recursively(node: dict, depth: int = 0, parent_label: Optional[str] = None, lang: str = 'Arabic') -> dict:
+    """Enrich leaf and internal nodes with labels & descriptions.
+    Internal nodes with no texts will be labeled by sampling texts from descendants.
+    """
+
+    def _collect_text_samples(n: dict, limit: int = 30) -> List[str]:
+        samples: List[str] = []
+        texts_here = n.get("texts") or []
+        if texts_here:
+            samples.extend(texts_here[:limit])
+        if len(samples) < limit:
+            for child in (n.get("clusters") or {}).values():
+                if len(samples) >= limit:
+                    break
+                samples.extend(_collect_text_samples(child, limit - len(samples)))
+        return samples
+
+    candidate_texts = node.get("texts") or _collect_text_samples(node, 30)
+    if candidate_texts:
         try:
-            # Generate label
-            label_obj = labeler_service.generate_label(node["texts"], depth, parent_label, lang=lang)
+            label_obj = labeler_service.generate_label(candidate_texts, depth, parent_label, lang=lang)
             node["label"] = label_obj.label
-            logger.debug(f"Generated label: {label_obj.label}")
             time.sleep(CONFIG["LLM_SLEEP_TIME"])
 
-            # Generate description
-            desc = describer_service.generate_description(node["texts"], label_obj.label, depth, lang)
+            desc = describer_service.generate_description(candidate_texts, label_obj.label, depth, lang)
             node["description"] = desc
-            logger.debug(f"Generated description: {desc[:50]}...")
             time.sleep(CONFIG["LLM_SLEEP_TIME"])
-        
         except Exception as e:
             logger.error(f"❌ Error enriching node at depth {depth}: {e}")
-            node["label"] = "Error Node"
-            node["description"] = "Failed to generate description"
+            node.setdefault("label", "Error Node")
+            node.setdefault("description", "Failed to generate description")
 
-    if "clusters" in node:
-        logger.debug(f"Recursing into {len(node['clusters'])} child clusters at depth {depth}.")
-        for child in node["clusters"].values():
-            enrich_node_recursively(child, depth + 1, node.get("label"), lang)
+    for child in (node.get("clusters") or {}).values():
+        enrich_node_recursively(child, depth + 1, node.get("label"), lang)
 
     return node
 
-# --- 4. Main Pipeline ---
 
-def generate_mindmap(config: dict) -> dict | None:
-    """The main pipeline to load, process, cluster, and enrich a document into a mindmap tree."""
-    
-    # --- Step 1: Load and Clean Text ---
-    logger.info(f"--- Step 1: Loading and Preprocessing document from {config['PDF_PATH']} ---")
-    paragraphs = json_preprocessor.load_and_preprocess_data(config['PDF_PATH'])
-    
+def generate_mindmap_for_path(file_path: Path) -> dict:
+    """Load a file (json/pdf/txt), generate enriched tree and return root node."""
+    if not file_path.exists():
+        raise FileNotFoundError(str(file_path))
+
+    suffix = file_path.suffix.lower()
+    logger.info(f"--- Step 1: Loading and Preprocessing document from {file_path} ---")
+    if suffix == ".pdf":
+        paragraphs = pdf_to_paragraphs(str(file_path))
+    else:
+        paragraphs = json_preprocessor.load_and_preprocess_data(str(file_path))
+
     if not paragraphs:
-        logger.error("❌ No paragraphs extracted. Exiting.")
-        return None
+        raise ValueError("No paragraphs extracted from file.")
 
     lang = returnlang(paragraphs[0])
-    logger.info(f"Detected language: {lang}")
-
     cleaned_text = [preprocess(para, lang) for para in paragraphs]
     cleaned_text = [t for t in cleaned_text if t.strip()]
-    logger.info(f"Remaining {len(cleaned_text)} cleaned paragraphs.")
+    if not cleaned_text:
+        raise ValueError("No text remaining after cleaning.")
 
-    if len(cleaned_text) == 0:
-        logger.error("❌ No text remaining after cleaning. Exiting.")
-        return None
-
-    # --- Step 2: Generate Embeddings ---
+    # --- Step 2: Embeddings ---
     logger.info("--- Step 2: Generating Embeddings in batches ---")
-    embeddings = []
+    embeddings: List[List[float]] = []
     text_count = len(cleaned_text)
-    batch_size = config["EMBEDDING_BATCH_SIZE"]
+    batch_size = CONFIG["EMBEDDING_BATCH_SIZE"]
     num_batches = (text_count - 1) // batch_size + 1
-
     for i in range(0, text_count, batch_size):
         batch = cleaned_text[i:i + batch_size]
-        batch_embeddings = embedder_service.encode(batch)
-        embeddings.extend(batch_embeddings)
+        embeddings.extend(embedder_service.encode(batch))
         logger.info(f"Processed batch {i // batch_size + 1}/{num_batches}")
+    embeddings_np = np.array(embeddings)
 
-    embeddings = np.array(embeddings)
-    logger.info(f"Embeddings shape: {embeddings.shape}")
-
-    # --- Step 3: Cluster Hierarchically ---
+    # --- Step 3: Clustering ---
     if text_count > 1:
         logger.info("--- Step 3: Starting Hierarchical Clustering ---")
         tree = recursive_cluster(
-            embeddings, 
-            cleaned_text, 
-            max_depth=config["MAX_CLUSTER_DEPTH"], 
-            min_size=config["MIN_CLUSTER_SIZE"]
+            embeddings_np,
+            cleaned_text,
+            max_depth=CONFIG["MAX_CLUSTER_DEPTH"],
+            min_size=CONFIG["MIN_CLUSTER_SIZE"],
         )
-        logger.info("✅ Clustering completed.")
     else:
-        logger.warning("⚠️ Not enough text for clustering. Skipping clustering.")
         tree = {"texts": cleaned_text}
 
-    # --- Step 4: Enrich the Tree (Labeling/Description) ---
-    logger.info("--- Step 4: Enriching tree with labels and descriptions (LLM calls) ---")
+    # --- Step 4: Enrichment ---
+    logger.info("--- Step 4: Enriching tree (LLM calls) ---")
     enriched_tree = enrich_node_recursively(tree, lang=lang)
-    logger.info("✅ Tree enrichment completed.")
 
-    # Generate a root node for the entire tree
+    # Root naming
     root_label, root_desc = tree_namer_service.generate_tree_name(enriched_tree, lang=lang)
-    root_node = {
-        "label": root_label,
-        "description": root_desc,
-        "clusters": {"content": enriched_tree},
-    }
-    
+    root_node = {"label": root_label, "description": root_desc, "clusters": {"content": enriched_tree}}
     return root_node
 
-# --- 5. Execution Block ---
 
+# --- 4. FastAPI App ---
+app = FastAPI(title="ThoughtFlow Mindmap API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # tighten to your Vite URL as needed
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class GenerateRequest(BaseModel):
+    file_path: str
+    max_depth: int | None = None
+    min_size: int | None = None
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/")
+def root_redirect():
+    """Convenience route so opening http://localhost:8000 goes to the docs."""
+    return RedirectResponse(url="/docs", status_code=307)
+
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in {".json", ".pdf", ".txt"}:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use JSON, PDF, or TXT")
+
+    dest = UPLOAD_DIR / f"{int(time.time()*1000)}_{Path(file.filename).name}"
+    content = await file.read()
+    try:
+        dest.write_bytes(content)
+    except Exception as e:
+        logger.exception("Failed to save uploaded file")
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"file_path": str(dest), "filename": file.filename, "size": len(content)}
+
+
+@app.post("/generate_mindmap")
+def generate_mindmap(req: GenerateRequest):
+    try:
+        # Temporarily override runtime config if provided
+        if req.max_depth is not None:
+            CONFIG["MAX_CLUSTER_DEPTH"] = int(req.max_depth)
+        if req.min_size is not None:
+            CONFIG["MIN_CLUSTER_SIZE"] = int(req.min_size)
+
+        root = generate_mindmap_for_path(Path(req.file_path))
+        return {
+            "mindmap": root,
+            "meta": {
+                "max_depth": CONFIG["MAX_CLUSTER_DEPTH"],
+                "min_size": CONFIG["MIN_CLUSTER_SIZE"],
+            },
+        }
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found. Upload first or check path.")
+    except Exception as e:
+        logger.exception("Mindmap generation failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- 5. Local run (uvicorn) ---
 if __name__ == "__main__":
-    logger.info("=" * 60)
-    logger.info("Starting ThoughtFlow Mindmap Creator")
-    logger.info("=" * 60)
+    # Start API server directly when running this file
+    import uvicorn
 
-    # Initial connection test
-    if not test_llm_connection(llm_client):
-        logger.error("⚠️ LLM connection failed. Check GROQ_API_KEY, validity, and network.")
-        exit(1)
-
-    # Run the main pipeline
-    start_time = time.time()
-    final_tree = generate_mindmap(CONFIG)
-
-    if final_tree:
-        # --- Step 5: Save and Visualize ---
-        logger.info("--- Step 5: Saving and Visualizing Results ---")
-        
-        # Save the core content of the tree for inspection
-        output_data_to_save = final_tree["clusters"]["content"]
-        try:
-            with open(CONFIG["OUTPUT_FILE"], 'w', encoding='utf-8') as f:
-                json.dump(output_data_to_save, f, indent=2, ensure_ascii=False)
-            logger.info(f"✅ Saved enriched tree content to {CONFIG['OUTPUT_FILE']}")
-        except Exception as e:
-            logger.error(f"❌ Failed to save output: {e}")
-
-        # Print preview
-        print("\n" + "="*80)
-        print(f"ENRICHED MINDMAP TREE PREVIEW (Root Label: {final_tree['label']})")
-        print("="*80)
-        print(json.dumps(output_data_to_save, indent=2, ensure_ascii=False)[:3000] + "\n...")
-
-        # Visualize
-        try:
-            visualize_mindmap_tree(final_tree)
-            logger.info("✅ Visualization completed.")
-        except Exception as e:
-            logger.error(f"❌ Visualization failed: {e}")
-            
-    end_time = time.time()
-    logger.info(f"Pipeline finished in {end_time - start_time:.2f} seconds.")
-    logger.info("=" * 60)
+    # Optional: quick LLM ping
+    test_llm_connection()
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

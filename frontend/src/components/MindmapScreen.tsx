@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
@@ -24,7 +24,7 @@ interface MindmapScreenProps {
 export function MindmapScreen({ mindmapData, onBack }: MindmapScreenProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set([mindmapData.id]));
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
 
@@ -62,6 +62,17 @@ export function MindmapScreen({ mindmapData, onBack }: MindmapScreenProps) {
     // Mock image export - in a real app, you'd capture the canvas/SVG
     alert('Image export functionality would be implemented here');
   };
+
+  // Expand all nodes by default when data changes
+  useEffect(() => {
+    const allIds = new Set<string>();
+    const collect = (n: any) => {
+      allIds.add(n.id);
+      (n.children || []).forEach((c: any) => collect(c));
+    };
+    collect(mindmapData);
+    setExpandedNodes(allIds);
+  }, [mindmapData]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-900 flex flex-col">
@@ -143,8 +154,9 @@ export function MindmapScreen({ mindmapData, onBack }: MindmapScreenProps) {
           <MindmapNode
             node={mindmapData}
             onToggle={toggleNode}
-            isExpanded={expandedNodes.has(mindmapData.id)}
+            isExpanded={true}
             level={0}
+            expandedNodes={expandedNodes}
           />
         </motion.div>
       </div>

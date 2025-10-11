@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 interface MindmapNodeProps {
   node: {
@@ -15,9 +15,10 @@ interface MindmapNodeProps {
   onToggle: (nodeId: string) => void;
   isExpanded: boolean;
   level: number;
+  expandedNodes: Set<string>;
 }
 
-export function MindmapNode({ node, onToggle, isExpanded, level }: MindmapNodeProps) {
+export function MindmapNode({ node, onToggle, isExpanded, level, expandedNodes }: MindmapNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   const nodeSize = level === 0 ? 'large' : level === 1 ? 'medium' : 'small';
@@ -25,12 +26,12 @@ export function MindmapNode({ node, onToggle, isExpanded, level }: MindmapNodePr
     large: 'px-8 py-4 text-lg',
     medium: 'px-6 py-3 text-base',
     small: 'px-4 py-2 text-sm'
-  };
+  } as const;
 
   return (
     <motion.div
       className="absolute"
-      style={{ left: node.x, top: node.y }}
+      style={{ left: node.x, top: node.y, maxWidth: 260 }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ duration: 0.5, delay: level * 0.1 }}
@@ -51,7 +52,7 @@ export function MindmapNode({ node, onToggle, isExpanded, level }: MindmapNodePr
         onMouseLeave={() => setIsHovered(false)}
         onClick={() => node.children && onToggle(node.id)}
       >
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           {node.children && node.children.length > 0 && (
             <motion.div
               animate={{ rotate: isExpanded ? 90 : 0 }}
@@ -60,10 +61,11 @@ export function MindmapNode({ node, onToggle, isExpanded, level }: MindmapNodePr
               <ChevronRight className="w-4 h-4 text-slate-600" />
             </motion.div>
           )}
-          <span className="text-slate-800 whitespace-nowrap">{node.title}</span>
+          <span className="text-slate-800 whitespace-pre-wrap break-words text-ellipsis overflow-hidden">
+            {node.title}
+          </span>
         </div>
 
-        {/* Tooltip */}
         {isHovered && node.description && (
           <motion.div
             className="absolute z-50 bg-slate-800 dark:bg-slate-700 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap"
@@ -77,6 +79,20 @@ export function MindmapNode({ node, onToggle, isExpanded, level }: MindmapNodePr
           </motion.div>
         )}
       </motion.div>
+
+      {/* Children */}
+      {isExpanded && node.children && node.children.length > 0 && (
+        node.children.map((child) => (
+          <MindmapNode
+            key={child.id}
+            node={child}
+            onToggle={onToggle}
+            isExpanded={expandedNodes.has(child.id)}
+            level={level + 1}
+            expandedNodes={expandedNodes}
+          />
+        ))
+      )}
     </motion.div>
   );
 }

@@ -1,11 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-import { Button } from './ui/button';
-import { MindmapNode } from './MindmapNode';
-import { useLanguage } from '../contexts/LanguageContext';
-import { ThemeLanguageToggle } from './ThemeLanguageToggle';
 
+// Fixed MindmapScreen.tsx
 interface MindmapData {
   id: string;
   title: string;
@@ -21,167 +18,280 @@ interface MindmapScreenProps {
   onBack: () => void;
 }
 
+// Simple button component
+const Button = ({ onClick, children, variant = 'default', size = 'default', className = '' }: any) => {
+  const baseClasses = 'px-4 py-2 rounded-lg font-medium transition-all duration-200';
+  const variantClasses = variant === 'outline' 
+    ? 'border-2 border-slate-300 hover:bg-slate-100 text-slate-700'
+    : 'bg-blue-600 hover:bg-blue-700 text-white';
+  const sizeClasses = size === 'sm' ? 'px-3 py-1.5 text-sm' : '';
+  
+  return (
+    <button 
+      onClick={onClick}
+      className={`${baseClasses} ${variantClasses} ${sizeClasses} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+// MindmapNode component
+const MindmapNode = ({ node, level }: { node: MindmapData; level: number }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const nodeSize = level === 0 ? 'large' : level === 1 ? 'medium' : 'small';
+  const sizeClasses = {
+    large: 'px-8 py-4 text-lg min-w-[200px]',
+    medium: 'px-6 py-3 text-base min-w-[160px]',
+    small: 'px-4 py-2 text-sm min-w-[120px]'
+  };
+
+  return (
+    <>
+      <motion.div
+        className="absolute"
+        style={{ 
+          left: node.x, 
+          top: node.y,
+        }}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.5, delay: level * 0.1 }}
+      >
+        <motion.div
+          className={`relative rounded-2xl shadow-lg cursor-pointer transition-all duration-300 ${sizeClasses[nodeSize]} border-2`}
+          style={{
+            backgroundColor: node.color,
+            borderColor: isHovered ? '#6366f1' : 'rgba(255,255,255,0.5)'
+          }}
+          whileHover={{ scale: 1.05 }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div className="flex items-center justify-center">
+            <span className="text-slate-800 font-semibold text-center">{node.title}</span>
+          </div>
+
+          {isHovered && node.description && (
+            <motion.div
+              className="absolute z-50 bg-slate-800 text-white px-3 py-2 rounded-lg text-sm shadow-xl pointer-events-none"
+              style={{ 
+                top: '100%', 
+                left: '50%', 
+                transform: 'translateX(-50%)',
+                marginTop: '8px',
+                minWidth: '200px',
+                maxWidth: '300px',
+                whiteSpace: 'normal'
+              }}
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              {node.description}
+              <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+            </motion.div>
+          )}
+        </motion.div>
+      </motion.div>
+
+      {node.children?.map((child) => (
+        <MindmapNode key={child.id} node={child} level={level + 1} />
+      ))}
+    </>
+  );
+};
+
 export function MindmapScreen({ mindmapData, onBack }: MindmapScreenProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
-  const { t } = useLanguage();
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.2, 3));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.2, 0.5));
-  const handleReset = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
 
-  const toggleNode = (nodeId: string) => {
-    setExpandedNodes(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(nodeId)) {
-        newSet.delete(nodeId);
-      } else {
-        newSet.add(nodeId);
+  // Calculate layout with proper positioning
+  const layoutData = useMemo(() => {
+    const nodeWidth = { 0: 200, 1: 160, 2: 120 };
+    const nodeHeight = 60;
+    const horizontalSpacing = 280;
+    const verticalSpacing = 120;
+
+    type NodeWithPosition = MindmapData & { level: number };
+    const positioned: NodeWithPosition[] = [];
+    const edges: Array<{ from: NodeWithPosition; to: NodeWithPosition }> = [];
+
+    const calculatePositions = (node: MindmapData, level: number, x: number, y: number, parentNode?: NodeWithPosition) => {
+      const positionedNode: NodeWithPosition = { ...node, x, y, level };
+      positioned.push(positionedNode);
+
+      if (parentNode) {
+        edges.push({ from: parentNode, to: positionedNode });
       }
-      return newSet;
-    });
-  };
 
-  const handleExportJSON = () => {
-    const dataStr = JSON.stringify(mindmapData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'mindmap.json';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+      if (node.children && node.children.length > 0) {
+        const childCount = node.children.length;
+        const totalHeight = (childCount - 1) * verticalSpacing;
+        let currentY = y - totalHeight / 2;
 
-  const handleExportImage = () => {
-    // Mock image export - in a real app, you'd capture the canvas/SVG
-    alert('Image export functionality would be implemented here');
-  };
-
-  // Expand all nodes by default when data changes
-  useEffect(() => {
-    const allIds = new Set<string>();
-    const collect = (n: any) => {
-      allIds.add(n.id);
-      (n.children || []).forEach((c: any) => collect(c));
+        node.children.forEach((child, index) => {
+          calculatePositions(
+            child,
+            level + 1,
+            x + horizontalSpacing,
+            currentY,
+            positionedNode
+          );
+          currentY += verticalSpacing;
+        });
+      }
     };
-    collect(mindmapData);
-    setExpandedNodes(allIds);
+
+    calculatePositions(mindmapData, 0, 100, 300);
+    
+    return { nodes: positioned, edges };
   }, [mindmapData]);
 
+  const fitToView = () => {
+    const el = containerRef.current;
+    if (!el || layoutData.nodes.length === 0) return;
+    
+    const rect = el.getBoundingClientRect();
+    const padding = 100;
+
+    const xs = layoutData.nodes.map(n => n.x);
+    const ys = layoutData.nodes.map(n => n.y);
+    const minX = Math.min(...xs) - 100;
+    const maxX = Math.max(...xs) + 300;
+    const minY = Math.min(...ys) - 50;
+    const maxY = Math.max(...ys) + 100;
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    const scaleX = (rect.width - padding * 2) / width;
+    const scaleY = (rect.height - padding * 2) / height;
+    const newZoom = Math.min(scaleX, scaleY, 1.5);
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    
+    setPan({
+      x: rect.width / 2 - centerX * newZoom,
+      y: rect.height / 2 - centerY * newZoom
+    });
+    setZoom(newZoom);
+  };
+
+  useEffect(() => {
+    setTimeout(fitToView, 100);
+  }, [layoutData]);
+
+  useEffect(() => {
+    window.addEventListener('resize', fitToView);
+    return () => window.removeEventListener('resize', fitToView);
+  }, [layoutData]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col">
       {/* Header */}
-      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700 p-4">
+      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200 p-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-4">
-            <Button 
-              variant="outline" 
-              onClick={onBack}
-              className="rounded-xl"
-            >
-              {t('back')}
-            </Button>
-            <h1 className="text-xl text-slate-800 dark:text-slate-100">{t('appName')}</h1>
+            <Button variant="outline" onClick={onBack}>← Back</Button>
+            <h1 className="text-xl font-bold text-slate-800">Mind Map</h1>
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center space-x-4">
-            {/* Zoom Controls */}
-            <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleZoomOut}
-              className="rounded-lg"
-            >
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" size="sm" onClick={handleZoomOut}>
               <ZoomOut className="w-4 h-4" />
             </Button>
-              <span className="text-sm text-slate-600 dark:text-slate-400 min-w-12 text-center">
-                {Math.round(zoom * 100)}%
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleZoomIn}
-                className="rounded-lg"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleReset}
-                className="rounded-lg"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            {/* Theme and Language Toggle */}
-            <ThemeLanguageToggle />
+            <span className="text-sm text-slate-600 min-w-[60px] text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <Button variant="outline" size="sm" onClick={handleZoomIn}>
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={fitToView}>
+              <RotateCcw className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Mindmap Area */}
-      <div className="flex-1 relative overflow-hidden">
-        <motion.div
-          ref={containerRef}
-          className="w-full h-full relative"
+      {/* Mindmap Canvas */}
+      <div className="flex-1 overflow-hidden relative" ref={containerRef}>
+        <div
+          className="w-full h-full"
           style={{
-            transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: '0 0',
+            transition: 'transform 0.2s ease-out'
           }}
-          transition={{ type: "tween", duration: 0.2 }}
         >
-          {/* Grid background */}
+          {/* Background grid */}
           <div 
-            className="absolute inset-0 opacity-20"
+            className="absolute inset-0 opacity-10"
             style={{
-              backgroundImage: `
-                radial-gradient(circle, #e2e8f0 1px, transparent 1px)
-              `,
-              backgroundSize: '40px 40px'
+              backgroundImage: 'radial-gradient(circle, #64748b 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              width: '4000px',
+              height: '4000px',
+              left: '-2000px',
+              top: '-2000px'
             }}
           />
-          
-          {/* Mindmap nodes */}
-          <MindmapNode
-            node={mindmapData}
-            onToggle={toggleNode}
-            isExpanded={true}
-            level={0}
-            expandedNodes={expandedNodes}
-          />
-        </motion.div>
+
+          {/* SVG for edges */}
+          <svg className="absolute inset-0 pointer-events-none" style={{ width: '4000px', height: '4000px' }}>
+            {layoutData.edges.map((edge, i) => {
+              const fromWidth = edge.from.level === 0 ? 200 : edge.from.level === 1 ? 160 : 120;
+              const toWidth = edge.to.level === 0 ? 200 : edge.to.level === 1 ? 160 : 120;
+              
+              const x1 = edge.from.x + fromWidth;
+              const y1 = edge.from.y + 30;
+              const x2 = edge.to.x;
+              const y2 = edge.to.y + 30;
+              
+              const midX = (x1 + x2) / 2;
+              
+              return (
+                <path
+                  key={i}
+                  d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+                  stroke="#94a3b8"
+                  strokeWidth={2}
+                  fill="none"
+                  opacity={0.4}
+                />
+              );
+            })}
+          </svg>
+
+          {/* Render nodes */}
+          {layoutData.nodes.map(node => (
+            <MindmapNode key={node.id} node={node} level={node.level} />
+          ))}
+        </div>
       </div>
 
-      {/* Action Bar */}
-      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 p-6">
-        <div className="flex items-center justify-center space-x-4">
-          <Button
-            onClick={handleExportJSON}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-          >
-            {t('exportJSON')}
+      {/* Footer */}
+      <div className="bg-white/90 backdrop-blur-sm border-t border-slate-200 p-4">
+        <div className="flex justify-center space-x-4">
+          <Button onClick={() => {
+            const json = JSON.stringify(mindmapData, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'mindmap.json';
+            a.click();
+            URL.revokeObjectURL(url);
+          }}>
+            Export JSON
           </Button>
-          <Button
-            onClick={handleExportImage}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-          >
-            {t('downloadImage')}
-          </Button>
-          <Button
-            onClick={onBack}
-            variant="outline"
-            className="px-6 py-2 rounded-xl border-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300"
-          >
-            {t('generateAnother')}
+          <Button variant="outline" onClick={onBack}>
+            Generate Another
           </Button>
         </div>
       </div>

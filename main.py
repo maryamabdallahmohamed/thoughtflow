@@ -12,7 +12,7 @@ import time
 import sys
 from pathlib import Path
 from typing import List, Optional
-
+import uvicorn
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -243,9 +243,6 @@ def generate_mindmap(req: GenerateRequest):
 
 # --- 5. Local run (uvicorn) ---
 if __name__ == "__main__":
-    # Start API server directly when running this file
-    import uvicorn
-
     # Optional: quick LLM ping
     test_llm_connection()
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

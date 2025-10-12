@@ -1,6 +1,43 @@
+
 # ThoughtFlow - AI-Powered Mindmap Generation System
 
 A modular, language-aware mindmap generation system built with clean architecture principles.
+
+---
+
+## 🧭 Quick Guide: Navigating the Repository
+
+This repository is organized for clarity and modularity. Here’s how to find your way around:
+
+- **config/**: Application configuration and settings.
+- **src/**: Main backend logic, including API, core mindmap logic, infrastructure, and utilities.
+- **frontend/**: Frontend code (React + Vite) for the user interface.
+- **prompts/**: YAML prompt templates for LLMs.
+- **tests/**: Unit and integration tests.
+- **main.py**: Entry point for running the backend API server.
+- **requirements.txt**: Python dependencies.
+- **mindmap_output.html**: Example output visualization of a generated mindmap.
+
+To get started, see the Installation and Usage sections below.
+
+---
+
+## 🧠 Mindmap Feature Overview
+
+The core feature of ThoughtFlow is automated, language-aware mindmap generation:
+
+1. **Input**: Provide a document (text, JSON, or PDF) via the API or Python interface.
+2. **Processing**: The system detects the language, generates embeddings, clusters content, and uses an LLM to create meaningful, human-readable node labels.
+3. **Output**: Returns a hierarchical mindmap structure (JSON) with descriptive IDs and labels, which can be visualized (see `mindmap_output.html`).
+
+**How to Use the Mindmap Feature:**
+- Use the API endpoints (`/api/v1/generate-mindmap`, `/api/v1/generate-from-file`) to generate mindmaps from text or files.
+- For Python usage, call `build_mindmap` from `src/core/builders/mindmap_builder.py`.
+- Visualize the output using the provided HTML or integrate with your own frontend.
+
+For more details, see the API Endpoints and Python Usage sections below.
+
+---
 
 ## 🌟 Features
 

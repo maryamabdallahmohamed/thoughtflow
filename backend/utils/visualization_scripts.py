@@ -158,10 +158,11 @@ class MindmapVisualizer:
         )
         
         if save_path:
-            fig.write_html(f"{save_path}_interactive_mindmap.html")
+            # write with plotly.js loaded from CDN to avoid embedding a large bundle
+            fig.write_html(f"{save_path}_interactive_mindmap.html", include_plotlyjs='cdn')
             print(f"💾 Interactive mindmap saved to {save_path}_interactive_mindmap.html")
-        
-        fig.show()
+
+        # Do not force opening GUI windows or browser tabs; let the caller decide.
     
     def _create_static_mindmap(self, embeddings, labels, texts, branches, save_path=None, result=None):
         """Create static matplotlib mindmap visualization"""
@@ -247,8 +248,8 @@ class MindmapVisualizer:
         if save_path:
             plt.savefig(f"{save_path}_static_mindmap.png", dpi=300, bbox_inches='tight')
             print(f"💾 Static mindmap saved to {save_path}_static_mindmap.png")
-        
-        plt.show()
+
+        # Do not call plt.show() automatically; callers (CLI/tests) can display if needed.
     
     def _create_network_mindmap(self, embeddings, labels, texts, branches, save_path=None):
         """Create network graph visualization of the mindmap"""
@@ -315,8 +316,8 @@ class MindmapVisualizer:
         if save_path:
             plt.savefig(f"{save_path}_network_mindmap.png", dpi=300, bbox_inches='tight')
             print(f"💾 Network mindmap saved to {save_path}_network_mindmap.png")
-        
-        plt.show()
+
+        # plt.show() omitted to avoid popping windows during batch runs
     
     def _create_mindmap_dashboard(self, result, save_path=None):
         """Create comprehensive dashboard with multiple views"""
@@ -412,10 +413,10 @@ class MindmapVisualizer:
         )
         
         if save_path:
-            fig.write_html(f"{save_path}_dashboard.html")
+            fig.write_html(f"{save_path}_dashboard.html", include_plotlyjs='cdn')
             print(f"💾 Dashboard saved to {save_path}_dashboard.html")
-        
-        fig.show()
+
+        # fig.show() omitted; caller may open the generated HTML instead
 
 # Standalone usage
 def visualize_mindmap_result(result, visualization_type='all', save_path=None):

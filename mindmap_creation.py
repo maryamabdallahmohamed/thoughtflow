@@ -181,13 +181,11 @@ def generate_mindmap(config: dict) -> dict | None:
 
     # Generate a root node for the entire tree
     root_label, root_desc = tree_namer_service.generate_tree_name(enriched_tree,lang=lang)
-    root_node = {
-        "label": root_label,
-        "description": root_desc,
-        "clusters": {"content": enriched_tree},
-    }
+    # Add root metadata directly to enriched_tree instead of wrapping it
+    enriched_tree["label"] = root_label
+    enriched_tree["description"] = root_desc
     
-    return root_node
+    return enriched_tree
 
 # --- 5. Execution Block ---
 
@@ -205,25 +203,25 @@ if __name__ == "__main__":
         # --- Step 5: Save and Visualize ---
         logger.info("--- Step 5: Saving and Visualizing Results ---")
         
-        # Save the core content of the tree for inspection
-        output_data_to_save = final_tree["clusters"]["content"]
+        # Save the enriched tree for inspection (no longer wrapped in "content")
         try:
             with open(CONFIG["OUTPUT_FILE"], 'w', encoding='utf-8') as f:
-                json.dump(output_data_to_save, f, indent=2, ensure_ascii=False)
-            logger.info(f"✅ Saved enriched tree content to {CONFIG['OUTPUT_FILE']}")
+                json.dump(final_tree, f, indent=2, ensure_ascii=False)
+            logger.info(f"✅ Saved enriched tree to {CONFIG['OUTPUT_FILE']}")
         except Exception as e:
             logger.error(f"❌ Failed to save output: {e}")
 
         # Print preview
         print("\n" + "="*80)
-        print(f"ENRICHED MINDMAP TREE PREVIEW (Root Label: {final_tree['label']})")
+        print(f"ENRICHED MINDMAP TREE PREVIEW (Root Label: {final_tree.get('label', 'N/A')})")
         print("="*80)
-        print(json.dumps(output_data_to_save, indent=2, ensure_ascii=False)[:3000] + "\n...")
+        print(json.dumps(final_tree, indent=2, ensure_ascii=False)[:3000] + "\n...")
 
         # Visualize
         try:
-            visualize_mindmap_tree(final_tree)
-            logger.info("✅ Visualization completed.")
+            # Save visualization but don't auto-open the browser to avoid duplicate tabs
+            visualize_mindmap_tree(final_tree, write_html=True, open_in_browser=False, include_plotlyjs='cdn')
+            logger.info("✅ Visualization saved (browser not opened).")
         except Exception as e:
             logger.error(f"❌ Visualization failed: {e}")
             

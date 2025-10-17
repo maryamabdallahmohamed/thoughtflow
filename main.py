@@ -167,8 +167,10 @@ def generate_mindmap_for_path(file_path: Path) -> dict:
 
     # Root naming
     root_label, root_desc = tree_namer_service.generate_tree_name(enriched_tree, lang=lang)
-    root_node = {"label": root_label, "description": root_desc, "clusters": {"content": enriched_tree}}
-    return root_node
+    # Add root metadata directly to enriched_tree instead of wrapping it
+    enriched_tree["label"] = root_label
+    enriched_tree["description"] = root_desc
+    return enriched_tree
 
 
 # --- 4. FastAPI App ---

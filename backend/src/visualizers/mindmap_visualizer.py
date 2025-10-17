@@ -4,9 +4,16 @@ import os
 import webbrowser
 import plotly.graph_objects as go
 
-def visualize_mindmap_tree(mindmap_data, output_html="mindmap_output.html"):
+def visualize_mindmap_tree(mindmap_data, output_html="mindmap_output.html", write_html: bool = True, open_in_browser: bool = True, include_plotlyjs: str | bool = 'cdn'):
     """
     Visualize a hierarchical mindmap (tree layout) using Plotly with auto spacing.
+
+    Args:
+        mindmap_data: tree dict to visualize
+        output_html: path to write the generated HTML
+        write_html: whether to write the HTML file (default True)
+        open_in_browser: whether to open the written HTML in a browser (default True)
+        include_plotlyjs: passed to plotly `write_html` (use 'cdn' to avoid embedding)
     """
     nodes = []
     edges = []
@@ -17,6 +24,9 @@ def visualize_mindmap_tree(mindmap_data, output_html="mindmap_output.html"):
         label = node.get("label") or (" ".join(node.get("texts", []))[:60] + "...")
         desc = node.get("description", "")
         children = list(node.get("clusters", {}).values())
+        
+        # Debug: Print each node as we traverse
+        print(f"Traversing node at depth {depth}: id={node_id}, label='{label}', parent={parent_id}, num_children={len(children)}")
 
         # Recursively get width (number of leaf nodes)
         def get_subtree_width(n):
@@ -101,8 +111,17 @@ def visualize_mindmap_tree(mindmap_data, output_html="mindmap_output.html"):
         width=1600
     )
 
-    # Save and open
-    fig.write_html(output_html)
-    abs_path = os.path.abspath(output_html)
-    print(f"✅ Tree mindmap saved to {output_html}")
-    webbrowser.open(f"file://{abs_path}")
+    # Save and optionally open
+    abs_path = None
+    if write_html:
+        # Use include_plotlyjs to control embedding vs CDN to keep files smaller
+        fig.write_html(output_html, include_plotlyjs=include_plotlyjs)
+        abs_path = os.path.abspath(output_html)
+        print(f"✅ Tree mindmap saved to {output_html}")
+
+    if open_in_browser and abs_path:
+        try:
+            webbrowser.open(f"file://{abs_path}")
+        except Exception:
+            # Don't fail if opening a browser isn't available in the environment
+            print("⚠️  Could not open browser automatically. Open the HTML file manually:", abs_path)

@@ -1,0 +1,17 @@
+# Exclude frontend and development artifacts
+frontend
+node_modules
+dist
+build
+.git
+.venv
+myenv
+__pycache__
+*.pyc
+.DS_Store
+logs
+uploads/*
+
+# exclude local IDE and OS files
+.vscode
+.idea

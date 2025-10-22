@@ -128,3 +128,18 @@
 2025-10-01 18:23:40,734 | INFO | MindmapClusteringSystem | clustering_system.py:37 | 📝 Processed 2 text segments
 2025-10-01 18:23:40,734 | INFO | MindmapClusteringSystem | clustering_system.py:43 | 🔢 Generating embeddings...
 2025-10-01 18:23:41,015 | INFO | MindmapClusteringSystem | clustering_system.py:47 | 🎯 Applying dynamic clustering...
+2025-10-22 22:20:18,362 | INFO | mindmap.api | main.py:192 | ✅ File uploaded and saved at /Users/maryamsaad/Documents/thoughtflow/backend/uploads/1761160818361_unit2ground_truth.json
+2025-10-22 22:20:52,663 | INFO | mindmap.api | main.py:104 | --- Step 1: Loading and Preprocessing document from /Users/maryamsaad/Documents/thoughtflow/backend/uploads/1761160818361_unit2ground_truth.json ---
+2025-10-22 22:20:53,312 | INFO | mindmap.api | main.py:120 | --- Step 2: Generating Embeddings in batches ---
+2025-10-22 22:20:53,673 | INFO | mindmap.api | main.py:129 | --- Step 3: Clustering ---
+2025-10-22 22:20:53,778 | INFO | mindmap.api | main.py:140 | --- Step 4: Enrichment ---
+2025-10-22 22:27:29,980 | INFO | mindmap.api | main.py:193 | ✅ File uploaded and saved at /Users/maryamsaad/Documents/thoughtflow/backend/uploads/1761161249979_unit4ground_truth.json
+2025-10-22 22:27:49,256 | INFO | mindmap.api | main.py:193 | ✅ File uploaded and saved at /Users/maryamsaad/Documents/thoughtflow/backend/uploads/1761161269255_unit4ground_truth_clean.json
+2025-10-22 22:27:56,230 | ERROR | mindmap.api | main.py:206 | Mindmap generation failed
+Traceback (most recent call last):
+  File "/Users/maryamsaad/Documents/thoughtflow/backend/main.py", line 202, in generate_mindmap
+    raise FileNotFoundError("No uploaded file found. Please upload first.")
+FileNotFoundError: No uploaded file found. Please upload first.
+2025-10-22 22:29:14,269 | INFO | mindmap.api | main.py:193 | ✅ File uploaded and saved at /Users/maryamsaad/Documents/thoughtflow/backend/uploads/1761161354269_unit4ground_truth_clean.json
+2025-10-22 22:29:21,097 | WARNING | mindmap.api | main.py:212 | No uploaded file found. Upload a file first via /upload or pass `file_path` in the POST body (use the file_path returned by /upload).
+2025-10-22 22:29:23,374 | WARNING | mindmap.api | main.py:212 | No uploaded file found. Upload a file first via /upload or pass `file_path` in the POST body (use the file_path returned by /upload).

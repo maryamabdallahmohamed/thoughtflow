@@ -1,56 +1,45 @@
-# ThoughtFlow — Backend API (for backend engineer)
+# ThoughtFlow — Backend API (for backend & frontend development)
 
-This README contains instructions to build and run a backend-only Docker image for the ThoughtFlow Mindmap API and examples for calling the exposed endpoints.
+This README explains how to build and run the backend Docker image, how to call the API endpoints, and how to integrate the API from a separately hosted frontend. Note: the image does NOT contain or serve any frontend assets — the backend runs independently and has no access to your frontend bundle.
 
-Files included in the image
-- `main.py` — FastAPI application entrypoint
-- `backend/` — application backend code (loaders, core logic, infrastructure)
-- `config/` — runtime settings
-- `prompts/` — system prompts used by the LLM services
-- `requirements.txt` — Python dependencies
+Quick overview
+- Image contains:  `backend/`
+- Network: container exposes port `8000`. Frontend must call the backend over HTTP(S) using the container/host address.
 
-What this image intentionally excludes
-- `frontend/` and any frontend assets
-- local virtualenvs and development artifacts
 
-Prerequisites
-- Docker 20+ installed on the engineer's machine
-- (Optional) access/credentials for the LLM provider and embedding service used by `backend.infrastructure` — these are configured via environment variables or mounted secrets as described below.
+Run the container (dev example)
+Mount `uploads/` so files persist and expose port 8000:
 
-Build the Docker image
 
-Run from the project root (where this README and `Dockerfile` live):
-
-```bash
-docker build -t thoughtflow-backend:latest .
+```env
+# .env (example)
+DEVICE=
+CACHE_DIR="cache/"
+Groq_API=
+DATABASE_URL=
 ```
 
-Run the container
+- Preferred ways to provide secrets/config:
+  - For development with Docker: use --env-file to pass the `.env` into the running container:
+    ```bash
+    docker run --rm -it \
+      -p 8000:8000 \
+      -v $(pwd)/uploads:/app/uploads \
+      --env-file .env \
+      thoughtflow-backend:latest
+    ```
+  - For production: use Docker secrets / cloud secret manager / environment injection in your orchestrator (avoid baking secrets into the image).
+  - Note: the project's Dockerfile copies `.env*` at build time if present, but copying secrets into images is discouraged. Prefer runtime injection (`--env-file` or secrets).
 
-Basic (development) run, exposing port 8000 and mounting a local `uploads/` directory so files persist:
+Health & docs
+- GET /health — health check
+- Open API docs: GET /docs (when container is reachable)
 
-```bash
-mkdir -p uploads
-docker run --rm -it \
-  -p 8000:8000 \
-  -v $(pwd)/uploads:/app/uploads \
-  -e LOG_LEVEL=INFO \
-  thoughtflow-backend:latest
-```
+Endpoints — usage and examples
+1) Upload a document (JSON/PDF/TXT)
+- Frontend should POST multipart/form-data to /upload. The response includes `file_path` which is an absolute path inside the container — pass that path to /generate_mindmap.
 
-Notes on environment variables
-- `LOG_LEVEL` — sets logging level (DEBUG, INFO, WARNING, ERROR). This is read by `config.settings`.
-- LLM / embedder credentials — the project uses `backend.infrastructure.llm` and `backend.infrastructure.embedder`. Provide any required keys via environment variables or mounted secret files. Typical approaches:
-  - Pass individual env vars with `-e LLM_API_KEY=...` and `-e EMBEDDER_KEY=...`
-  - Or mount a secret/config file at runtime with `-v /path/to/secret:/run/secrets/llm_key:ro` and read it in the app.
-
-Health endpoint
-- GET /health — quick check that the service is running and healthy
-
-Upload endpoint
-- POST /upload (multipart/form-data) — Uploads a file and returns a JSON object containing `file_path`, `filename`, and `size`.
-
-Example curl for upload (JSON/TXT/PDF supported):
+Example curl:
 
 ```bash
 curl -X POST "http://localhost:8000/upload" \
@@ -60,30 +49,70 @@ curl -X POST "http://localhost:8000/upload" \
 # { "file_path": "/app/uploads/1760..._document.json", "filename": "document.json", "size": 12345 }
 ```
 
-Generate mindmap
-- POST /generate_mindmap — JSON body: { "file_path": "/app/uploads/1760..._document.json" }
-- Optional fields: `max_depth` (int), `min_size` (int) — will temporarily override runtime clustering settings for that request.
+2) Generate mindmap
+- POST JSON to /generate_mindmap with `file_path` returned by /upload. Optional fields: `max_depth`, `min_size` to temporarily override clustering settings for that request.
 
-Example curl to generate mindmap:
+Example curl:
 
 ```bash
 curl -X POST "http://localhost:8000/generate_mindmap" \
   -H "Content-Type: application/json" \
-  -d '{"file_path": "/app/uploads/1760..._document.json", "max_depth": 4, "min_size": 2}'
-
+  -d '{"file_path": "/app/uploads/1760..._document.json", "max_depth": 4, "min_size": 2"}'
 # Response: { "mindmap": { ... }, "meta": { "max_depth": 4, "min_size": 2 } }
 ```
 
-Important operational notes for the backend engineer
-- LLM and embedder calls are performed at runtime. They will require network access and valid credentials.
-- The code may call external models synchronously, which can be slow — configure timeouts and the environment accordingly.
-- The `uploads/` directory is where uploaded files are stored. Mount it to persistent storage when running in production.
+Frontend integration notes
+- The backend image will not serve your frontend. Host the frontend separately (Vite dev server, static hosting, or CDN) and configure it to call the backend URL (e.g., http://localhost:8000 or your production API host).
+- CORS: the backend currently uses CORSMiddleware allowing "*" — acceptable for local dev but tighten to your frontend origin in production.
+- Workflow from frontend:
+  1. Upload file via POST /upload (multipart/form-data) → receive `file_path`.
+  2. POST to /generate_mindmap with the returned `file_path` → receive mindmap JSON.
+  3. Render the returned `mindmap` tree in the frontend.
 
-Suggested next steps for the engineer
-1. Verify/replace the `backend.infrastructure.llm` and `backend.infrastructure.embedder` configurations to use production keys and desired providers.
-2. Add secrets management (Docker secrets, environment vars, or a vault) rather than passing keys on the command line.
-3. Add a production-ready process manager (systemd, container orchestrator) and configure logging aggregation.
-4. Consider adding a lightweight POST /shutdown or admin endpoints (with auth) for controlled shutdowns during maintenance.
+Example minimal frontend fetch (in a Vite/React app, set API base in env var):
 
-Contact
-If anything in the API wiring is unclear, inspect `main.py` and `backend/` modules. I included the minimal set of endpoints and file locations in this README.
+```javascript
+// example: src/api.ts
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+export async function uploadFile(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: form });
+  return res.json(); // { file_path, filename, size }
+}
+
+export async function generateMindmap(filePath, opts = {}) {
+  const body = JSON.stringify({ file_path: filePath, ...opts });
+  const res = await fetch(`${API_BASE}/generate_mindmap`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  return res.json(); // { mindmap, meta }
+}
+```
+
+Tips for frontend development
+- Do not rely on container internal paths for long-term storage. If you need to persist beyond the container, store uploaded files in a shared volume, S3, or another external store and pass a stable reference to the backend (you can modify the backend to accept external URLs if needed).
+- Be prepared for long-running requests: generating a mindmap can make external LLM calls and take time. Consider:
+  - Showing progress UI / spinner.
+  - Using a server-side task queue (Celery/RQ) and a status endpoint for async processing if you need non-blocking behavior.
+  - Increasing client and proxy timeouts.
+
+Configurable parameters
+- Temporary runtime overrides can be sent in /generate_mindmap: `max_depth`, `min_size`.
+- Embedding batch size and defaults come from `config/settings`. To change defaults, modify config or expose env vars via the container.
+
+Security & production checklist
+- Narrow CORS allowlist to trusted frontend origin(s).
+- Serve backend over HTTPS and enforce auth (API keys, OAuth, JWT) for production.
+- Use secure secret management for LLM/embedder keys (Docker secrets, Vault, or cloud secret manager).
+- Add rate limiting, authentication, input validation, and monitoring/log aggregation.
+- Run container behind a reverse proxy and configure graceful shutdown / health checks.
+
+Troubleshooting
+- 404 from /generate_mindmap: ensure you passed the `file_path` returned by /upload and that the uploads volume is mounted in the container you call.
+- Long runtimes / timeouts: monitor logs, consider async task processing.
+- Missing credentials / 5xx: verify env vars for LLM/embedder are present inside the container.
+``

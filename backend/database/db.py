@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from config.settings import settings
+from backend.config.settings import settings
 
 # Example: postgresql+asyncpg://user:password@localhost:5432/mindmap_db
 DATABASE_URL = settings.DATABASE_URL

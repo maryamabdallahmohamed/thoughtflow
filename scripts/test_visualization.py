@@ -1,3 +1,9 @@
+import os
+import sys
+
+# Ensure the repo root is importable so `backend` resolves when run from scripts/
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 from backend.src.visualizers.mindmap_visualizer import visualize_mindmap_tree
 

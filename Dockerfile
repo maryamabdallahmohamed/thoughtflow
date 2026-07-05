@@ -2,7 +2,7 @@
 # Builds a minimal image containing only Python runtime and the backend code
 # Exposes port 8000 and runs the FastAPI app using Uvicorn
 
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 # Working directory for build
 WORKDIR /app
@@ -24,6 +24,7 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m spacy download en_core_web_sm
 
 COPY backend/ ./backend/
 COPY .env* ./
@@ -32,7 +33,7 @@ COPY .env* ./
 RUN mkdir -p /app/cache /app/uploads
 
 # Final image: smaller runtime layer
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Create non-root user
 ARG APPUSER=appuser
@@ -48,9 +49,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy app files from builder
 COPY --from=builder /app/backend ./backend
-COPY --from=builder /app/main.py ./main.py
-COPY --from=builder /app/config ./config
-COPY --from=builder /app/prompts ./prompts
+
 
 
 RUN mkdir -p /app/uploads /app/cache \

@@ -35,12 +35,8 @@ from backend.utils.language_detector import returnlang
 from backend.infrastructure.embedder import get_embedding_service
 from backend.infrastructure.llm import GroqClient
 from config.settings import settings
+from backend.utils.logging_handler import get_logger
 
-# --- 2. Configuration & Initialization ---
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger("mindmap.api")
 
 UPLOAD_DIR = project_root / "uploads"
@@ -62,20 +58,6 @@ llm_client = GroqClient()
 embedder_service = get_embedding_service()
 labeler_service = NodeLabelerService()
 describer_service = NodeDescriptionService()
-
-# --- 3. Core Functions ---
-def test_llm_connection() -> bool:
-    logger.info("Starting LLM connection test...")
-    try:
-        test_response = llm_client.generate("Say 'Hello, I am working!' in one sentence.")
-        if test_response and test_response.strip():
-            logger.info(f"✅ LLM test successful: {test_response[:50]}...")
-            return True
-        logger.error("❌ LLM returned empty response in test.")
-        return False
-    except Exception as e:
-        logger.error(f"❌ LLM test failed: {e}")
-        return False
 
 
 def enrich_node_recursively(node: dict, depth: int = 0, parent_label: Optional[str] = None, lang: str = 'Arabic') -> dict:
@@ -245,6 +227,4 @@ def generate_mindmap(req: GenerateRequest):
 
 # --- 5. Local run (uvicorn) ---
 if __name__ == "__main__":
-    # Optional: quick LLM ping
-    test_llm_connection()
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

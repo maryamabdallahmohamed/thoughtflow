@@ -8,9 +8,12 @@ __pycache__
 .Ds_Store
 archive
 *.png
+!docs/images/*.png
 frontend/node_modules
 .kiro
 node_modules
 node_modules/
 *.html
 *.json
+uploads/*
+*.log
